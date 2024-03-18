@@ -22,11 +22,11 @@ use std::process::Command;
 pub mod bounding_box;
 pub mod color;
 pub mod encoder;
-pub mod lod;
 pub mod meta;
 pub mod point;
-pub mod point_cloud;
 
+/// get Command instance for CloudCompare
+/// change the path according to each OS
 pub fn command() -> Command {
     // https://www.cloudcompare.org/doc/wiki/index.php/Command_line_mode
     #[cfg(target_os = "macos")]
@@ -43,6 +43,7 @@ pub fn command() -> Command {
     Command::new("CloudCompare")
 }
 
+/// Command line arguments
 #[derive(Parser)]
 #[clap(author, version, about)]
 struct Args {
@@ -59,8 +60,7 @@ struct Args {
     global_shift: u8,
 }
 
-type LODKey = (i32, i32, i32);
-
+/// detect if CloudCompare is installed by executing command
 pub fn detect_cloudcompare_exists() -> anyhow::Result<String> {
     let mut cmd = command();
     cmd.arg("-SILENT");
@@ -69,6 +69,7 @@ pub fn detect_cloudcompare_exists() -> anyhow::Result<String> {
     Ok(msg.to_string())
 }
 
+/// convert pcd file to txt file with CloudCompare
 pub fn convert_pcd_file_to_txt<S0: AsRef<OsStr>, S1: AsRef<OsStr>>(
     input_file_path: S0,
     out_txt_path: S1,
@@ -102,45 +103,7 @@ pub fn convert_pcd_file_to_txt<S0: AsRef<OsStr>, S1: AsRef<OsStr>>(
     Ok(())
 }
 
-#[allow(unused)]
-pub fn subsampling(
-    input_file_path: &String,
-    out_txt_path: &String,
-    spatial: f64,
-    drop_global_shift: bool,
-) -> anyhow::Result<()> {
-    let mut cmd = command();
-
-    cmd.arg("-SILENT")
-        .arg("-AUTO_SAVE")
-        .arg("OFF")
-        .arg("-O")
-        // CAUTION!: global shift fixes accuracy errors
-        // [ccGlobalShiftManager] Entity has very big coordinates: original accuracy may be lost! (you should apply a Global Shift or Scale)
-        .arg("-GLOBAL_SHIFT")
-        .arg("AUTO")
-        .arg(input_file_path)
-        .arg("-SS")
-        .arg("SPATIAL")
-        .arg(spatial.to_string())
-        .arg("-C_EXPORT_FMT")
-        .arg("ASC")
-        .arg("-SEP") // separator
-        .arg("SPACE");
-
-    if drop_global_shift {
-        cmd.arg("-DROP_GLOBAL_SHIFT");
-    }
-
-    cmd.arg("-SAVE_CLOUDS").arg("FILE").arg(out_txt_path);
-
-    let output = cmd.output()?;
-    let result = output.stdout;
-    let msg = std::str::from_utf8(&result)?;
-    println!("{}", msg);
-    Ok(())
-}
-
+/// read points from txt file
 pub fn read_points_from_txt(path: &std::path::Path) -> anyhow::Result<Vec<Point>> {
     let f = File::open(path);
     match f {
@@ -157,7 +120,11 @@ pub fn read_points_from_txt(path: &std::path::Path) -> anyhow::Result<Vec<Point>
     }
 }
 
-fn generate_points_hash(
+/// key represents level of detail for hash map
+type LODKey = (i32, i32, i32);
+
+/// generate hash map of points
+fn generate_points_map(
     points: &Vec<Point>,
     bounds: &BoundingBox,
     unit: &f64,
@@ -185,6 +152,7 @@ fn generate_points_hash(
     map
 }
 
+/// process level of detail
 pub async fn process_lod<F0, F1, Fut0, Fut1>(
     input_file_path: &String,
     callback_per_unit: F0,
@@ -265,7 +233,7 @@ where
         let unit = size / div;
         let (cx, cy, cz) = bounds.ceil(unit);
 
-        let mut map = generate_points_hash(&points, &bounds, &unit);
+        let mut map = generate_points_map(&points, &bounds, &unit);
         for x in 0..cx {
             for y in 0..cy {
                 for z in 0..cz {
@@ -300,6 +268,7 @@ where
     Ok(())
 }
 
+/// 
 fn uniform_sample_points(points: Vec<Point>, threshold: usize) -> Vec<Point> {
     let n = points.len();
     let u = (n as f64) / (threshold as f64);
@@ -307,6 +276,7 @@ fn uniform_sample_points(points: Vec<Point>, threshold: usize) -> Vec<Point> {
     points.into_iter().step_by(step).collect()
 }
 
+/// 
 async fn handler() -> anyhow::Result<()> {
     let args: Args = Args::parse();
 
@@ -380,175 +350,6 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs::{self},
-        io::Write,
-        path::PathBuf,
-    };
-
-    use image::DynamicImage;
-    use serial_test::serial;
-
-    use crate::{convert_pcd_file_to_txt, encoder::Encoder, meta::Meta, point::Point, process_lod};
-
-    fn get_data_dir() -> String {
-        std::fs::canonicalize(PathBuf::from("./data"))
-            .unwrap()
-            .as_path()
-            .display()
-            .to_string()
-    }
-
-    async fn pclod_test(name: &str) {
-        let dir = get_data_dir();
-        let in_file_path = format!("{}/{}", &dir, name);
-        let per_unit = |_, _txt, _lod, _x, _y, _z| async move {
-            // dbg!(format!("{} ({}, {}, {})", &lod, &x, &y, &z));
-            Ok(())
-        };
-        let per_lod = |_idivs, _min_unit, _bounds, _coordinates| async move {
-            // dbg!("per lod");
-            Ok(())
-        };
-        let _ = process_lod(&in_file_path, per_unit, per_lod, false).await;
-    }
-
-    #[allow(unused)]
-    async fn pclod_test_with_save(name: &str) {
-        let dir = get_data_dir();
-        let root = format!("{}/processed", &dir);
-        let _ = fs::remove_dir_all(&root);
-        let _ = fs::create_dir(&root);
-        let in_file_path = format!("{}/{}", &dir, name);
-        let per_unit = |bbox, pts: Vec<Point>, lod, x, y, z| async move {
-            let name = format!("{}-{}-{}-{}.txt", &lod, &x, &y, &z);
-            let out_file_path = format!("{}/processed/{}", get_data_dir(), name);
-
-            // let mut hdl = File::create(&out_file_path).unwrap();
-            // let txt = convert_points_to_txt(&pts);
-            // hdl.write_all(txt.as_bytes()).unwrap();
-
-            let name = format!("{}-{}-{}-{}.png", &lod, &x, &y, &z);
-            let out_file_path = format!("{}/processed/{}", get_data_dir(), name);
-            let encoder = Encoder::new(&pts, Some(bbox));
-            let img = encoder.encode_8bit_quad();
-            let img = DynamicImage::from(img);
-            // let _ = img.save_with_format(&out_file_path, image::ImageFormat::WebP);
-            let _ = img.save_with_format(out_file_path, image::ImageFormat::Png);
-
-            /*
-            let encoder = Encoder::new(&pts, Some(bbox));
-            let (position, color) = encoder.encode_8bit();
-            let _ = DynamicImage::from(position).save_with_format(
-                format!(
-                    "{}/processed/{}",
-                    get_data_dir(),
-                    format!("{}-{}-{}-{}.webp", &lod, &x, &y, &z)
-                ),
-                // image::ImageFormat::Png,
-                image::ImageFormat::WebP,
-            );
-            let _ = DynamicImage::from(color).save_with_format(
-                format!(
-                    "{}/processed/{}",
-                    get_data_dir(),
-                    format!("{}-{}-{}-{}-color.webp", &lod, &x, &y, &z)
-                ),
-                image::ImageFormat::WebP,
-            );
-            */
-
-            Ok(())
-        };
-        let per_lod = |lod, unit, bounds, coordinates| async move {
-            let meta = Meta {
-                lod,
-                bounds,
-                coordinates,
-            };
-            let json = serde_json::to_string(&meta).unwrap();
-            let out_file_path = format!("{}/processed/meta.json", get_data_dir());
-            let mut f = std::fs::File::create(out_file_path).unwrap();
-            f.write_all(json.as_bytes()).unwrap();
-
-            Ok(())
-        };
-        process_lod(&in_file_path, per_unit, per_lod, false).await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn txt_format_test() {
-        pclod_test("pcd.txt").await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn csv_format_test() {
-        pclod_test("BLNo75-76.csv").await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn xyz_format_test() {
-        pclod_test("BLNo74-75.xyz").await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn las_format_test() {
-        pclod_test_with_save("Scaniverse.las").await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn bunny_format_csv() {
-        pclod_test("bunny.csv").await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn large_txt_test() {
-        pclod_test_with_save("uav.txt").await;
-        // pclod_test_with_save("D5.txt").await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn e57_format_test() {
-        pclod_test_with_save("bunnyDouble.e57").await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn las_to_txt_test() {
-        let dir = get_data_dir();
-        let name = "PointCloud.laz";
-        let input_file_path = format!("{}/{}", &dir, name);
-        let mut opath = PathBuf::from(&input_file_path);
-        opath.set_extension("txt");
-        let out_file_path = String::from(opath.to_str().unwrap());
-        let _ = convert_pcd_file_to_txt(&input_file_path, out_file_path, false);
-        /*
-        let min_sampling_distance = 1. / 128.;
-        let _ = subsampling(
-            &input_file_path,
-            &out_file_path,
-            min_sampling_distance,
-            false,
-        );
-        */
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn level_test() {
-        pclod_test_with_save("uav_20201112_south-0-0-1.txt").await;
-        // pclod_test_with_save("Scaniverse.txt").await;
-        // pclod_test_with_save("bunny.csv").await;
-        // pclod_test_with_save("BLNo74-75.xyz").await;
-    }
-
     #[test]
     fn detect_app_exists() {
         let r = super::detect_cloudcompare_exists();

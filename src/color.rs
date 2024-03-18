@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+/// A color struct that holds the red, green, and blue values of a color.
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct Color {
     pub red: u8,

@@ -4,7 +4,9 @@ use image::{Rgba, Rgba32FImage, RgbaImage};
 
 use crate::{bounding_box::BoundingBox, color::Color, point::Point};
 
+/// Point cloud encoder to generate images from point cloud data
 pub struct Encoder {
+    /// Normalized points in the range of 0.0 ~ 1.0 for x, y, z coordinates based on the bounding box
     normalized: Vec<Point>,
 }
 
@@ -39,10 +41,7 @@ impl Encoder {
             let y = idx as u32 / side;
             let x = idx as u32 % side;
             let pos = p.position;
-
             let cast = pos.cast::<f32>();
-            // let c = p.color.unwrap_or(Color::white());
-
             img.put_pixel(x, y, Rgba([cast.x, cast.y, cast.z, 1.0]));
         });
 
