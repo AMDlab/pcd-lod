@@ -12,13 +12,12 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashMap;
 use std::convert::From;
 use std::ffi::OsStr;
-use std::fs::{canonicalize, create_dir_all, File};
+use std::fs::{canonicalize, create_dir, File};
 use std::future::Future;
 use std::io::{prelude::*, BufReader};
 use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::SystemTime;
 
 pub mod bounding_box;
 pub mod color;
@@ -36,7 +35,11 @@ pub fn command() -> Command {
         // TODO: or brew install cloudcompare
         cmd
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("C:\\Program Files\\CloudCompare\\CloudCompare.exe")
+    }
+    #[cfg(target_os = "linux")]
     Command::new("CloudCompare")
 }
 
@@ -66,9 +69,9 @@ pub fn detect_cloudcompare_exists() -> anyhow::Result<String> {
     Ok(msg.to_string())
 }
 
-pub fn convert_pcd_file_to_txt<S: AsRef<OsStr>, T: AsRef<OsStr>>(
-    input_file_path: S,
-    out_txt_path: T,
+pub fn convert_pcd_file_to_txt<S0: AsRef<OsStr>, S1: AsRef<OsStr>>(
+    input_file_path: S0,
+    out_txt_path: S1,
     drop_global_shift: bool,
 ) -> anyhow::Result<()> {
     let mut cmd = command();
@@ -145,7 +148,7 @@ pub fn read_points_from_txt(path: &std::path::Path) -> anyhow::Result<Vec<Point>
             let reader = BufReader::new(f);
             let points = reader
                 .lines()
-                .flatten()
+                .map_while(Result::ok)
                 .filter_map(|line| Point::parse(&line).ok())
                 .collect();
             Ok(points)
@@ -198,12 +201,11 @@ where
 
     ensure!(
         i_path.exists(),
-        "input file {:?} is not existed!",
+        "Input file {:?} is not existed!",
         i_path.to_string_lossy()
     );
 
     let full_input_file_path = canonicalize(&i_path)?;
-    dbg!(&full_input_file_path);
 
     let mut o_path = full_input_file_path.clone();
 
@@ -225,7 +227,7 @@ where
 
     ensure!(
         PathBuf::from(&seed_file_path).exists() || PathBuf::from(&seed_file_path_0).exists(),
-        "generating seed file is failed!"
+        "Generating seed file is failed!"
     );
 
     let path = if PathBuf::from(&seed_file_path).exists() {
@@ -256,7 +258,7 @@ where
     let mut coordinates = Coordinates::new();
     let point_count_threshold = 2_u32.pow(14) as usize;
 
-    println!("start processing... (level: {})", level);
+    println!("Start processing... (all level: {})", level);
 
     for lod in 0..=idivision {
         let div = 2_f64.powf(lod as f64);
@@ -289,6 +291,8 @@ where
             }
         }
         callback_per_lod(idivision, min_unit, bounds.clone(), coordinates.clone()).await?;
+
+        println!("Processing level:{} is done!", lod);
     }
 
     std::fs::remove_file(&path)?;
@@ -315,38 +319,49 @@ async fn handler() -> anyhow::Result<()> {
         "CloudCompare is not installed!"
     );
 
-    let mut output_path = PathBuf::from(&o_point_cloud);
+    let output_path = canonicalize(o_point_cloud)?;
+    ensure!(output_path.is_dir(), "Output path must be directory");
+    let output_path = &output_path;
 
-    let per_unit = |bbox, pts: Vec<Point>, lod, x, y, z| async move {
+    let per_unit = |bbox, pts: Vec<Point>, lod: i32, x: i32, y: i32, z: i32| async move {
         let encoder = Encoder::new(&pts, Some(bbox));
         // let img = encoder.encode_8bit_quad();
         // let img = DynamicImage::from(img);
         // let _ = img.save_with_format(&out_file_path, image::ImageFormat::WebP);
         // let _ = img.save_with_format(out_file_path, image::ImageFormat::Png);
 
-        let prefix = format!("{}/{}/{}-{}-{}", o_point_cloud, lod, x, y, z);
+        let mut path = output_path.clone();
+        path.push(lod.to_string());
+        let _ = create_dir(&path);
+
+        let mut position_image_path = path.clone();
+        position_image_path.push(format!("{}-{}-{}.png", x, y, z));
+        let mut color_image_path = path.clone();
+        color_image_path.push(format!("{}-{}-{}-color.png", x, y, z));
         let (position, color) = encoder.encode_8bit();
         let _ = DynamicImage::from(position)
-            .save_with_format(format!("{}.png", &prefix,), image::ImageFormat::Png);
-        let _ = DynamicImage::from(color)
-            .save_with_format(format!("{}-color.png", &prefix), image::ImageFormat::Png);
+            .save_with_format(&position_image_path, image::ImageFormat::Png);
+        let _ =
+            DynamicImage::from(color).save_with_format(&color_image_path, image::ImageFormat::Png);
 
         Ok(())
     };
-    let per_lod = |lod, unit, bounds, coordinates| async move {
+    let per_lod = |lod, _unit, bounds, coordinates| async move {
         let meta = Meta {
             lod,
             bounds,
             coordinates,
         };
         let json = serde_json::to_string(&meta).unwrap();
-        let out_file_path = format!("{}/meta.json", o_point_cloud);
-        let mut f = std::fs::File::create(out_file_path).unwrap();
+
+        let mut meta_file_path = output_path.clone();
+        meta_file_path.push("meta.json");
+        let mut f = File::create(meta_file_path).unwrap();
         f.write_all(json.as_bytes()).unwrap();
 
         Ok(())
     };
-    let _ = process_lod(&i_point_cloud, per_unit, per_lod, use_global_shift).await?;
+    process_lod(&i_point_cloud, per_unit, per_lod, use_global_shift).await?;
 
     Ok(())
 }
@@ -513,7 +528,7 @@ mod tests {
         let mut opath = PathBuf::from(&input_file_path);
         opath.set_extension("txt");
         let out_file_path = String::from(opath.to_str().unwrap());
-        let _ = convert_pcd_file_to_txt(&input_file_path, &out_file_path, false);
+        let _ = convert_pcd_file_to_txt(&input_file_path, out_file_path, false);
         /*
         let min_sampling_distance = 1. / 128.;
         let _ = subsampling(
