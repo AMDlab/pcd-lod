@@ -215,19 +215,19 @@ where
         for (k, v) in next.map().iter() {
             let (x, y, z) = k;
             let c_key = format!("{}-{}-{}", x, y, z);
-            let bbox = BoundingBox::from_iter(v.points.iter());
-            coordinates
-                .entry(next.lod())
-                .or_default()
-                .entry(c_key)
-                .or_insert(bbox);
             let under_threshold = v.points.len() < point_count_threshold;
             let pts = if under_threshold {
                 v.points.clone()
             } else {
                 v.uniform_sample_points(point_count_threshold)
             };
-            callback_per_unit(next.bounds().clone(), pts, next.lod(), *x, *y, *z).await?;
+            let bbox = BoundingBox::from_iter(pts.iter());
+            coordinates
+                .entry(next.lod())
+                .or_default()
+                .entry(c_key)
+                .or_insert(bbox.clone());
+            callback_per_unit(bbox, pts, next.lod(), *x, *y, *z).await?;
 
             all_under_threshold = all_under_threshold && under_threshold;
         }
