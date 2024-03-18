@@ -11,7 +11,8 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 use std::collections::HashMap;
 use std::convert::From;
-use std::fs::{create_dir_all, File};
+use std::ffi::OsStr;
+use std::fs::{canonicalize, create_dir_all, File};
 use std::future::Future;
 use std::io::{prelude::*, BufReader};
 use std::iter::FromIterator;
@@ -31,10 +32,8 @@ pub fn command() -> Command {
     // https://www.cloudcompare.org/doc/wiki/index.php/Command_line_mode
     #[cfg(target_os = "macos")]
     {
-        let mut cmd = Command::new("open");
-        cmd.arg("-a");
-        cmd.arg("cloudcompare");
-        cmd.arg("--args");
+        let cmd = Command::new("/Applications/CloudCompare.app/Contents/MacOS/CloudCompare");
+        // TODO: or brew install cloudcompare
         cmd
     }
     #[cfg(not(target_os = "macos"))]
@@ -67,9 +66,9 @@ pub fn detect_cloudcompare_exists() -> anyhow::Result<String> {
     Ok(msg.to_string())
 }
 
-pub fn convert_pcd_file_to_txt(
-    input_file_path: &String,
-    out_txt_path: &String,
+pub fn convert_pcd_file_to_txt<S: AsRef<OsStr>, T: AsRef<OsStr>>(
+    input_file_path: S,
+    out_txt_path: T,
     drop_global_shift: bool,
 ) -> anyhow::Result<()> {
     let mut cmd = command();
@@ -195,28 +194,34 @@ where
     Fut0: Future<Output = anyhow::Result<()>>,
     Fut1: Future<Output = anyhow::Result<()>>,
 {
-    let mut opath = PathBuf::from(&input_file_path);
+    let i_path = PathBuf::from(&input_file_path);
 
     ensure!(
-        opath.exists(),
+        i_path.exists(),
         "input file {:?} is not existed!",
-        opath.to_string_lossy()
+        i_path.to_string_lossy()
     );
 
+    let full_input_file_path = canonicalize(&i_path)?;
+    dbg!(&full_input_file_path);
+
+    let mut o_path = full_input_file_path.clone();
+
     // Create initial pcd with txt format
-    opath.set_file_name("seed.txt");
-    let seed_file_path = String::from(opath.to_str().unwrap());
+    o_path.set_file_name("seed.txt");
+
+    let seed_file_path = String::from(o_path.to_str().unwrap());
 
     println!("Converting pcd to txt...");
 
-    convert_pcd_file_to_txt(input_file_path, &seed_file_path, use_global_shift)?;
+    convert_pcd_file_to_txt(&full_input_file_path, &seed_file_path, use_global_shift)?;
 
     println!("Converting pcd to txt is done!");
 
     // CAUTION:
     //  CloudCompareで複数の点群をmergeした上で書き出すと、ファイル名のsuffixに_0が付与される
-    opath.set_file_name("seed.txt_0");
-    let seed_file_path_0 = String::from(opath.to_str().unwrap());
+    o_path.set_file_name("seed.txt_0");
+    let seed_file_path_0 = String::from(o_path.to_str().unwrap());
 
     ensure!(
         PathBuf::from(&seed_file_path).exists() || PathBuf::from(&seed_file_path_0).exists(),
@@ -341,7 +346,7 @@ async fn handler() -> anyhow::Result<()> {
 
         Ok(())
     };
-    let _ = process_lod(&i_point_cloud, per_unit, per_lod, use_global_shift).await;
+    let _ = process_lod(&i_point_cloud, per_unit, per_lod, use_global_shift).await?;
 
     Ok(())
 }
