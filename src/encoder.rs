@@ -5,7 +5,6 @@ use image::{Rgba, Rgba32FImage, RgbaImage};
 use crate::{bounding_box::BoundingBox, color::Color, point::Point};
 
 pub struct Encoder {
-    bbox: BoundingBox,
     normalized: Vec<Point>,
 }
 
@@ -27,7 +26,7 @@ impl Encoder {
             })
             .collect();
 
-        Self { bbox, normalized }
+        Self { normalized }
     }
 
     pub fn encode_32bit(&self) -> Rgba32FImage {

@@ -1,7 +1,10 @@
+use anyhow::ensure;
 use bounding_box::BoundingBox;
 use clap::Parser;
 
-use meta::Coordinates;
+use encoder::Encoder;
+use image::DynamicImage;
+use meta::{Coordinates, Meta};
 use point::Point;
 
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
@@ -31,6 +34,7 @@ pub fn command() -> Command {
         let mut cmd = Command::new("open");
         cmd.arg("-a");
         cmd.arg("cloudcompare");
+        cmd.arg("--args");
         cmd
     }
     #[cfg(not(target_os = "macos"))]
@@ -41,11 +45,11 @@ pub fn command() -> Command {
 #[clap(author, version, about)]
 struct Args {
     /// point cloud file name of the point cloud to be input (.txt, .csv, .las, .xyz, .e57 supported)
-    #[clap(long, default_value = "uav_20201112_south-0-0-0.txt")]
+    #[clap(long)]
     input: String,
 
     /// folder name to be output
-    #[clap(long, default_value = "lod")]
+    #[clap(long)]
     output: String,
 
     /// apply global shift
@@ -63,7 +67,6 @@ pub fn detect_cloudcompare_exists() -> anyhow::Result<String> {
     Ok(msg.to_string())
 }
 
-#[allow(unused)]
 pub fn convert_pcd_file_to_txt(
     input_file_path: &String,
     out_txt_path: &String,
@@ -192,26 +195,32 @@ where
     Fut0: Future<Output = anyhow::Result<()>>,
     Fut1: Future<Output = anyhow::Result<()>>,
 {
-    assert!(
-        PathBuf::from(&input_file_path).exists(),
-        "input file is not existed!"
+    let mut opath = PathBuf::from(&input_file_path);
+
+    ensure!(
+        opath.exists(),
+        "input file {:?} is not existed!",
+        opath.to_string_lossy()
     );
 
     // Create initial pcd with txt format
-    let mut opath = PathBuf::from(&input_file_path);
     opath.set_file_name("seed.txt");
     let seed_file_path = String::from(opath.to_str().unwrap());
 
+    println!("Converting pcd to txt...");
+
     convert_pcd_file_to_txt(input_file_path, &seed_file_path, use_global_shift)?;
+
+    println!("Converting pcd to txt is done!");
 
     // CAUTION:
     //  CloudCompareで複数の点群をmergeした上で書き出すと、ファイル名のsuffixに_0が付与される
     opath.set_file_name("seed.txt_0");
     let seed_file_path_0 = String::from(opath.to_str().unwrap());
 
-    assert!(
+    ensure!(
         PathBuf::from(&seed_file_path).exists() || PathBuf::from(&seed_file_path_0).exists(),
-        "generating seed.txt is failed!"
+        "generating seed file is failed!"
     );
 
     let path = if PathBuf::from(&seed_file_path).exists() {
@@ -241,6 +250,8 @@ where
 
     let mut coordinates = Coordinates::new();
     let point_count_threshold = 2_u32.pow(14) as usize;
+
+    println!("start processing... (level: {})", level);
 
     for lod in 0..=idivision {
         let div = 2_f64.powf(lod as f64);
@@ -294,35 +305,43 @@ async fn handler() -> anyhow::Result<()> {
     let o_point_cloud = &args.output;
     let use_global_shift = args.global_shift == 1;
 
-    let now = SystemTime::now();
-    let unix_time = now
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    let filepath = format!("./data/{}", unix_time);
-    let path = Path::new(&filepath);
-    if !path.exists() {
-        create_dir_all(path).unwrap();
-    }
+    ensure!(
+        detect_cloudcompare_exists().is_ok(),
+        "CloudCompare is not installed!"
+    );
 
-    let dir = std::fs::canonicalize(PathBuf::from(filepath))?
-        .as_path()
-        .display()
-        .to_string();
+    let mut output_path = PathBuf::from(&o_point_cloud);
 
-    let arr = i_point_cloud.split('/');
-    let name = arr.last().ok_or(anyhow::anyhow!("Failed to split path"))?;
-    let input_file_path = format!("{}/{}", &dir, &name);
+    let per_unit = |bbox, pts: Vec<Point>, lod, x, y, z| async move {
+        let encoder = Encoder::new(&pts, Some(bbox));
+        // let img = encoder.encode_8bit_quad();
+        // let img = DynamicImage::from(img);
+        // let _ = img.save_with_format(&out_file_path, image::ImageFormat::WebP);
+        // let _ = img.save_with_format(out_file_path, image::ImageFormat::Png);
 
-    process_lod(
-        &input_file_path,
-        |_bbox, pts, lod, x, y, z| async move { Ok(()) },
-        |_idivs, _min_unit, _bounds, _coordinates| async move { Ok(()) },
-        use_global_shift,
-    )
-    .await?;
+        let prefix = format!("{}/{}/{}-{}-{}", o_point_cloud, lod, x, y, z);
+        let (position, color) = encoder.encode_8bit();
+        let _ = DynamicImage::from(position)
+            .save_with_format(format!("{}.png", &prefix,), image::ImageFormat::Png);
+        let _ = DynamicImage::from(color)
+            .save_with_format(format!("{}-color.png", &prefix), image::ImageFormat::Png);
 
-    std::fs::remove_file(&input_file_path)?;
+        Ok(())
+    };
+    let per_lod = |lod, unit, bounds, coordinates| async move {
+        let meta = Meta {
+            lod,
+            bounds,
+            coordinates,
+        };
+        let json = serde_json::to_string(&meta).unwrap();
+        let out_file_path = format!("{}/meta.json", o_point_cloud);
+        let mut f = std::fs::File::create(out_file_path).unwrap();
+        f.write_all(json.as_bytes()).unwrap();
+
+        Ok(())
+    };
+    let _ = process_lod(&i_point_cloud, per_unit, per_lod, use_global_shift).await;
 
     Ok(())
 }
