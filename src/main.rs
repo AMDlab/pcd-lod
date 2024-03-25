@@ -6,10 +6,10 @@ use encoder::Encoder;
 use image::DynamicImage;
 use meta::{Coordinates, Meta};
 use point::Point;
+use point_cloud_map::*;
 
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::ParallelIterator;
 
-use std::collections::HashMap;
 use std::convert::From;
 use std::ffi::OsStr;
 use std::fs::{canonicalize, create_dir, File};
@@ -24,6 +24,8 @@ pub mod color;
 pub mod encoder;
 pub mod meta;
 pub mod point;
+pub mod point_cloud_map;
+pub mod point_cloud_unit;
 
 /// get Command instance for CloudCompare
 /// change the path according to each OS
@@ -31,9 +33,8 @@ pub fn command() -> Command {
     // https://www.cloudcompare.org/doc/wiki/index.php/Command_line_mode
     #[cfg(target_os = "macos")]
     {
-        let cmd = Command::new("/Applications/CloudCompare.app/Contents/MacOS/CloudCompare");
         // TODO: or brew install cloudcompare
-        cmd
+        Command::new("/Applications/CloudCompare.app/Contents/MacOS/CloudCompare")
     }
     #[cfg(target_os = "windows")]
     {
@@ -123,35 +124,6 @@ pub fn read_points_from_txt(path: &std::path::Path) -> anyhow::Result<Vec<Point>
 /// key represents level of detail for hash map
 type LODKey = (i32, i32, i32);
 
-/// generate hash map of points
-fn generate_points_map(
-    points: &Vec<Point>,
-    bounds: &BoundingBox,
-    unit: &f64,
-) -> HashMap<LODKey, Vec<Point>> {
-    let min = &bounds.min;
-    let pts: Vec<(LODKey, Point)> = points
-        .par_iter()
-        .map(|v| {
-            let position = v.position;
-            let x = position.x;
-            let y = position.y;
-            let z = position.z;
-            let ix = ((x - min.x) / unit).floor() as i32;
-            let iy = ((y - min.y) / unit).floor() as i32;
-            let iz = ((z - min.z) / unit).floor() as i32;
-            let key = (ix, iy, iz);
-            (key, v.clone())
-        })
-        .collect();
-
-    let mut map = HashMap::new();
-    for (key, v) in pts {
-        map.entry(key).or_insert_with(std::vec::Vec::new).push(v);
-    }
-    map
-}
-
 /// process level of detail
 pub async fn process_lod<F0, F1, Fut0, Fut1>(
     input_file_path: &String,
@@ -160,8 +132,8 @@ pub async fn process_lod<F0, F1, Fut0, Fut1>(
     use_global_shift: bool,
 ) -> anyhow::Result<()>
 where
-    F0: Fn(BoundingBox, Vec<Point>, i32, i32, i32, i32) -> Fut0,
-    F1: Fn(i32, f64, BoundingBox, Coordinates) -> Fut1,
+    F0: Fn(BoundingBox, Vec<Point>, u32, i32, i32, i32) -> Fut0,
+    F1: Fn(u32, BoundingBox, Coordinates) -> Fut1,
     Fut0: Future<Output = anyhow::Result<()>>,
     Fut1: Future<Output = anyhow::Result<()>>,
 {
@@ -204,63 +176,70 @@ where
         seed_file_path_0
     };
 
-    // get file size of seed_file_path as mega byte
-    let file_size = std::fs::metadata(&path)?.len() as f64;
-    let mb_size = file_size / 1024. / 1024.;
-    let threshold_mb_size = 1.5;
-
-    // get division level from file size
-    let level = if mb_size > threshold_mb_size {
-        (mb_size / threshold_mb_size).log(8.).ceil().max(1.) as u32
-    } else {
-        0
-    };
-
     let points = read_points_from_txt(Path::new(&path))?;
     let bounds = BoundingBox::from_iter(points.iter().map(|p| p.position));
-    let size = bounds.max_size();
-    let level_scale = 2_u32.pow(level);
-    let min_unit = size / (level_scale as f64);
-    let idivision = level as i32;
-
-    let mut coordinates = Coordinates::new();
     let point_count_threshold = 2_u32.pow(14) as usize;
 
-    println!("Start processing... (all level: {})", level);
+    let mut coordinates = Coordinates::new();
 
-    for lod in 0..=idivision {
-        let div = 2_f64.powf(lod as f64);
-        let unit = size / div;
-        let (cx, cy, cz) = bounds.ceil(unit);
+    println!("Start processing...");
 
-        let mut map = generate_points_map(&points, &bounds, &unit);
-        for x in 0..cx {
-            for y in 0..cy {
-                for z in 0..cz {
-                    let key = (x, y, z);
-                    let points = map.remove(&key);
-                    if let Some(points) = points {
-                        let pts = if points.len() < point_count_threshold {
-                            points
-                        } else {
-                            uniform_sample_points(points, point_count_threshold)
-                        };
-
-                        let c_key = format!("{}-{}-{}", x, y, z);
-                        let bbox = BoundingBox::from_iter(pts.iter());
-                        coordinates
-                            .entry(lod)
-                            .or_default()
-                            .entry(c_key)
-                            .or_insert(bbox.clone());
-                        callback_per_unit(bbox, pts, lod, x, y, z).await?;
-                    }
-                }
-            }
+    // create root map
+    let mut parent_map = {
+        let map = PointCloudMap::root(0, bounds.clone(), &points);
+        let points = map.map().get(&(0, 0, 0));
+        if let Some(unit) = points {
+            let c_key = format!("{}-{}-{}", 0, 0, 0);
+            coordinates
+                .entry(map.lod())
+                .or_default()
+                .entry(c_key)
+                .or_insert(map.bounds().clone());
+            let under_threshold = unit.points.len() < point_count_threshold;
+            let pts = if under_threshold {
+                unit.points.clone()
+            } else {
+                unit.uniform_sample_points(point_count_threshold)
+            };
+            callback_per_unit(map.bounds().clone(), pts, 0, 0, 0, 0).await?;
         }
-        callback_per_lod(idivision, min_unit, bounds.clone(), coordinates.clone()).await?;
+        callback_per_lod(map.lod() + 1, bounds.clone(), coordinates.clone()).await?;
+        map
+    };
 
-        println!("Processing level:{} is done!", lod);
+    loop {
+        let next = parent_map.divide(point_count_threshold);
+
+        let mut all_under_threshold = true;
+
+        for (k, v) in next.map().iter() {
+            let (x, y, z) = k;
+            let c_key = format!("{}-{}-{}", x, y, z);
+            let bbox = BoundingBox::from_iter(v.points.iter());
+            coordinates
+                .entry(next.lod())
+                .or_default()
+                .entry(c_key)
+                .or_insert(bbox);
+            let under_threshold = v.points.len() < point_count_threshold;
+            let pts = if under_threshold {
+                v.points.clone()
+            } else {
+                v.uniform_sample_points(point_count_threshold)
+            };
+            callback_per_unit(next.bounds().clone(), pts, next.lod(), *x, *y, *z).await?;
+
+            all_under_threshold = all_under_threshold && under_threshold;
+        }
+        callback_per_lod(next.lod() + 1, bounds.clone(), coordinates.clone()).await?;
+
+        if all_under_threshold {
+            break;
+        }
+
+        println!("Processing level:{} is done!", next.lod());
+
+        parent_map = next;
     }
 
     std::fs::remove_file(&path)?;
@@ -268,15 +247,7 @@ where
     Ok(())
 }
 
-/// 
-fn uniform_sample_points(points: Vec<Point>, threshold: usize) -> Vec<Point> {
-    let n = points.len();
-    let u = (n as f64) / (threshold as f64);
-    let step = u.ceil() as usize;
-    points.into_iter().step_by(step).collect()
-}
-
-/// 
+///
 async fn handler() -> anyhow::Result<()> {
     let args: Args = Args::parse();
 
@@ -293,7 +264,7 @@ async fn handler() -> anyhow::Result<()> {
     ensure!(output_path.is_dir(), "Output path must be directory");
     let output_path = &output_path;
 
-    let per_unit = |bbox, pts: Vec<Point>, lod: i32, x: i32, y: i32, z: i32| async move {
+    let per_unit = |bbox, pts: Vec<Point>, lod: u32, x: i32, y: i32, z: i32| async move {
         let encoder = Encoder::new(&pts, Some(bbox));
         // let img = encoder.encode_8bit_quad();
         // let img = DynamicImage::from(img);
@@ -316,7 +287,7 @@ async fn handler() -> anyhow::Result<()> {
 
         Ok(())
     };
-    let per_lod = |lod, _unit, bounds, coordinates| async move {
+    let per_lod = |lod, bounds, coordinates| async move {
         let meta = Meta {
             lod,
             bounds,
