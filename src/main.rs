@@ -11,6 +11,7 @@ use point_cloud_map::*;
 use rayon::prelude::ParallelIterator;
 
 use std::convert::From;
+
 use std::ffi::OsStr;
 use std::fs::{canonicalize, create_dir, File};
 use std::future::Future;
@@ -33,7 +34,6 @@ pub fn command() -> Command {
     // https://www.cloudcompare.org/doc/wiki/index.php/Command_line_mode
     #[cfg(target_os = "macos")]
     {
-        // TODO: or brew install cloudcompare
         Command::new("/Applications/CloudCompare.app/Contents/MacOS/CloudCompare")
     }
     #[cfg(target_os = "windows")]
