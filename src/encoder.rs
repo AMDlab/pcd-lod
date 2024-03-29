@@ -31,23 +31,8 @@ impl Encoder {
         Self { normalized }
     }
 
-    pub fn encode_32bit(&self) -> Rgba32FImage {
-        let n = self.normalized.len();
-        let side = (n as f64).sqrt().ceil() as u32;
-
-        let mut img = Rgba32FImage::new(side, side);
-
-        self.normalized.iter().enumerate().for_each(|(idx, p)| {
-            let y = idx as u32 / side;
-            let x = idx as u32 % side;
-            let pos = p.position;
-            let cast = pos.cast::<f32>();
-            img.put_pixel(x, y, Rgba([cast.x, cast.y, cast.z, 1.0]));
-        });
-
-        img
-    }
-
+    /// Encode point cloud data to 8-bit image.
+    /// The 1st image is for position and the 2nd image is for color.
     pub fn encode_8bit(&self) -> (RgbaImage, RgbaImage) {
         let n = self.normalized.len();
         let side = (n as f64).sqrt().ceil() as u32;
@@ -71,7 +56,13 @@ impl Encoder {
         (position, color)
     }
 
-    pub fn encode_8bit_quad(&self) -> RgbaImage {
+    /// Encode point cloud data to 8-bit quad image.
+    /// f32 value divided into 4 channels each with 8-bit.
+    /// 1st quadrant: lowest 8-bit of x, y, z, and alpha channel has color.r() (if use_alpha_channel_as_color is true)
+    /// 2nd quadrant: 2nd 8-bit of x, y, z, and alpha channel has color.g() (if use_alpha_channel_as_color is true)
+    /// 3rd quadrant: 3rd 8-bit of x, y, z, and alpha channel has color.b() (if use_alpha_channel_as_color is true)
+    /// 4th quadrant: highest 8-bit of x, y, z, and alpha channel has 255
+    pub fn encode_8bit_quad(&self, use_alpha_channel_as_color: bool) -> RgbaImage {
         let n = self.normalized.len();
         let side = (n as f64).sqrt().ceil() as u32;
         let mut img8u = RgbaImage::new(side * 2, side * 2);
@@ -80,28 +71,52 @@ impl Encoder {
             let x = idx as u32 % side;
             let pos = p.position;
 
-            // f64 to f32 integer converter
+            // convert f64 to f32, and split into 4 channels each with 8-bit
             let ix = encode_8bit_4channels(pos.x);
             let iy = encode_8bit_4channels(pos.y);
             let iz = encode_8bit_4channels(pos.z);
 
-            /*
-            let color = p.color.unwrap_or(Color::white());
-            img8u.put_pixel(x, y, Rgba([ix.0, iy.0, iz.0, color.r()]));
-            img8u.put_pixel(x + side, y, Rgba([ix.1, iy.1, iz.1, color.g()]));
-            img8u.put_pixel(x, y + side, Rgba([ix.2, iy.2, iz.2, color.b()]));
-            */
-
-            img8u.put_pixel(x, y, Rgba([ix.0, iy.0, iz.0, u8::MAX]));
-            img8u.put_pixel(x + side, y, Rgba([ix.1, iy.1, iz.1, u8::MAX]));
-            img8u.put_pixel(x, y + side, Rgba([ix.2, iy.2, iz.2, u8::MAX]));
+            if use_alpha_channel_as_color {
+                let color = p.color.unwrap_or(Color::white());
+                img8u.put_pixel(x, y, Rgba([ix.0, iy.0, iz.0, color.r()]));
+                img8u.put_pixel(x + side, y, Rgba([ix.1, iy.1, iz.1, color.g()]));
+                img8u.put_pixel(x, y + side, Rgba([ix.2, iy.2, iz.2, color.b()]));
+            } else {
+                img8u.put_pixel(x, y, Rgba([ix.0, iy.0, iz.0, u8::MAX]));
+                img8u.put_pixel(x + side, y, Rgba([ix.1, iy.1, iz.1, u8::MAX]));
+                img8u.put_pixel(x, y + side, Rgba([ix.2, iy.2, iz.2, u8::MAX]));
+            }
             img8u.put_pixel(x + side, y + side, Rgba([ix.3, iy.3, iz.3, u8::MAX]));
         });
 
         img8u
     }
+
+    /// Encode point cloud data to 32-bit image.
+    /// The 1st image is for position and the 2nd image is for color.
+    pub fn encode_32bit(&self) -> (Rgba32FImage, RgbaImage) {
+        let n = self.normalized.len();
+        let side = (n as f64).sqrt().ceil() as u32;
+
+        let mut position = Rgba32FImage::new(side, side);
+        let mut color = RgbaImage::new(side, side);
+
+        self.normalized.iter().enumerate().for_each(|(idx, p)| {
+            let y = idx as u32 / side;
+            let x = idx as u32 % side;
+            let pos = p.position;
+            let cast = pos.cast::<f32>();
+            position.put_pixel(x, y, Rgba([cast.x, cast.y, cast.z, 1.0]));
+
+            let c = p.color.unwrap_or(Color::white());
+            color.put_pixel(x, y, Rgba([c.r(), c.g(), c.b(), u8::MAX]));
+        });
+
+        (position, color)
+    }
 }
 
+/// Convert f64 to 4 u8 channels
 fn encode_8bit_4channels(v01: f64) -> (u8, u8, u8, u8) {
     let iu = (v01 * (u32::MAX as f64)).floor() as u32;
     let p3 = ((iu >> 24) & 0xff) as u8;

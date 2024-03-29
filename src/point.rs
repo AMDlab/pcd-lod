@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::prelude::Color;
 
+/// Point struct that holds the position and color
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Point {
     pub position: Point3<f64>,
@@ -10,8 +11,7 @@ pub struct Point {
 }
 
 impl Point {
-    #[allow(clippy::result_unit_err)]
-    pub fn parse(line: &str) -> Result<Self, ()> {
+    pub fn try_parse(line: &str) -> anyhow::Result<Self> {
         let mut split = line.split_whitespace();
         let x = split.next();
         let y = split.next();
@@ -41,7 +41,7 @@ impl Point {
                     color: None,
                 })
             }
-            _ => Err(()),
+            _ => Err(anyhow::anyhow!("Invalid point format")),
         }
     }
 

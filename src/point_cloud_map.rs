@@ -7,18 +7,20 @@ use crate::{
     LODKey,
 };
 
+/// PointCloudMap struct that holds the octree of the point cloud data.
 pub struct PointCloudMap {
     lod: u32,
     bounds: BoundingBox,
-    map: HashMap<LODKey, PointCloudUnit>,
+    octree: HashMap<LODKey, PointCloudUnit>,
 }
 
 impl PointCloudMap {
-    pub fn root(lod: u32, bounds: BoundingBox, points: &Vec<Point>) -> Self {
+    /// Create a root octree with the given bounds and points.
+    pub fn root(bounds: BoundingBox, points: &Vec<Point>) -> Self {
         Self {
-            lod,
+            lod: 0,
             bounds,
-            map: vec![(
+            octree: vec![(
                 (0, 0, 0),
                 PointCloudUnit {
                     points: points.clone(),
@@ -37,6 +39,7 @@ impl PointCloudMap {
         &self.bounds
     }
 
+    /// Divide the octree into 8 sub octrees.
     pub fn divide(&self, threshold: usize) -> Self {
         let next_lod = self.lod + 1;
         let div = 2_f64.powf(next_lod as f64);
@@ -45,7 +48,7 @@ impl PointCloudMap {
 
         let mut next = HashMap::new();
 
-        self.map.iter().for_each(|(_k, v)| {
+        self.octree.iter().for_each(|(_k, v)| {
             if v.points.len() > threshold {
                 let pts: Vec<(LODKey, Point)> = v
                     .points
@@ -71,7 +74,7 @@ impl PointCloudMap {
         Self {
             lod: next_lod,
             bounds: self.bounds.clone(),
-            map: next
+            octree: next
                 .into_iter()
                 .map(|pts| {
                     let (key, points) = pts;
@@ -82,6 +85,6 @@ impl PointCloudMap {
     }
 
     pub fn map(&self) -> &HashMap<LODKey, PointCloudUnit> {
-        &self.map
+        &self.octree
     }
 }

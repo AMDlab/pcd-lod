@@ -1,16 +1,14 @@
 use std::{
     ffi::OsStr,
-    fs::{canonicalize, create_dir, File},
+    fs::{canonicalize, File},
     future::Future,
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
     process::Command,
 };
 
 use anyhow::ensure;
-use encoder::Encoder;
-use image::DynamicImage;
-use meta::Meta;
+
 use point::Point;
 use prelude::{BoundingBox, Coordinates, PointCloudMap};
 
@@ -57,7 +55,7 @@ fn command(path: Option<&String>) -> Command {
 }
 
 /// detect if CloudCompare is installed by executing command
-fn detect_cloudcompare_exists(path: Option<&String>) -> anyhow::Result<String> {
+pub fn detect_cloudcompare_exists(path: Option<&String>) -> anyhow::Result<String> {
     let mut cmd = command(path);
     cmd.arg("-SILENT");
     let output = cmd.output()?;
@@ -109,70 +107,12 @@ fn read_points_from_txt(path: &std::path::Path) -> anyhow::Result<Vec<Point>> {
             let points = reader
                 .lines()
                 .map_while(Result::ok)
-                .filter_map(|line| Point::parse(&line).ok())
+                .filter_map(|line| Point::try_parse(&line).ok())
                 .collect();
             Ok(points)
         }
         _ => Err(anyhow::anyhow!("failed to open file")),
     }
-}
-
-pub async fn generate_lod(
-    input_file: &String,
-    output_directory: &String,
-    use_global_shift: bool,
-    exec_path: Option<&String>,
-) -> anyhow::Result<()> {
-    ensure!(
-        detect_cloudcompare_exists(exec_path).is_ok(),
-        "CloudCompare is not installed!"
-    );
-
-    let output_path = canonicalize(output_directory)?;
-    ensure!(output_path.is_dir(), "Output path must be directory");
-    let output_path = &output_path;
-
-    let per_unit = |bbox, pts: Vec<Point>, lod: u32, x: i32, y: i32, z: i32| async move {
-        let encoder = Encoder::new(&pts, Some(bbox));
-        // let img = encoder.encode_8bit_quad();
-        // let img = DynamicImage::from(img);
-        // let _ = img.save_with_format(&out_file_path, image::ImageFormat::WebP);
-        // let _ = img.save_with_format(out_file_path, image::ImageFormat::Png);
-
-        let mut path = output_path.clone();
-        path.push(lod.to_string());
-        let _ = create_dir(&path);
-
-        let mut position_image_path = path.clone();
-        position_image_path.push(format!("{}-{}-{}.png", x, y, z));
-        let mut color_image_path = path.clone();
-        color_image_path.push(format!("{}-{}-{}-color.png", x, y, z));
-        let (position, color) = encoder.encode_8bit();
-        let _ = DynamicImage::from(position)
-            .save_with_format(&position_image_path, image::ImageFormat::Png);
-        let _ =
-            DynamicImage::from(color).save_with_format(&color_image_path, image::ImageFormat::Png);
-
-        Ok(())
-    };
-    let per_lod = |lod, bounds, coordinates| async move {
-        let meta = Meta {
-            lod,
-            bounds,
-            coordinates,
-        };
-        let json = serde_json::to_string(&meta).unwrap();
-
-        let mut meta_file_path = output_path.clone();
-        meta_file_path.push("meta.json");
-        let mut f = File::create(meta_file_path).unwrap();
-        f.write_all(json.as_bytes()).unwrap();
-
-        Ok(())
-    };
-    process_lod(exec_path, input_file, per_unit, per_lod, use_global_shift).await?;
-
-    Ok(())
 }
 
 /// process level of detail
@@ -217,8 +157,8 @@ where
 
     println!("Converting pcd to txt is done!");
 
-    // CAUTION:
-    //  CloudCompareで複数の点群をmergeした上で書き出すと、ファイル名のsuffixに_0が付与される
+    // When multiple point clouds are merged and written out with CloudCompare, the suffix of the file name is _0.
+    // Therefore, if _0 is attached, use it.
     o_path.set_file_name("seed.txt_0");
     let seed_file_path_0 = String::from(o_path.to_str().unwrap());
 
@@ -243,7 +183,7 @@ where
 
     // create root map
     let mut parent_map = {
-        let map = PointCloudMap::root(0, bounds.clone(), &points);
+        let map = PointCloudMap::root(bounds.clone(), &points);
         let points = map.map().get(&(0, 0, 0));
         if let Some(unit) = points {
             let c_key = format!("{}-{}-{}", 0, 0, 0);

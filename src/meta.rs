@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::prelude::BoundingBox;
 
+/// bounding boxes for each unit in octree of LOD
 pub type Coordinates = HashMap<u32, HashMap<String, BoundingBox>>;
 
 /// Meta representation of the processed lod data
