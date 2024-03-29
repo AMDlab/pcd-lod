@@ -30,18 +30,23 @@ pub mod point_cloud_unit;
 
 /// get Command instance for CloudCompare
 /// change the path according to each OS
-pub fn command() -> Command {
-    // https://www.cloudcompare.org/doc/wiki/index.php/Command_line_mode
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("/Applications/CloudCompare.app/Contents/MacOS/CloudCompare")
+pub fn command(path: Option<&String>) -> Command {
+    match path {
+        Some(path) => Command::new(path),
+        None => {
+            // https://www.cloudcompare.org/doc/wiki/index.php/Command_line_mode
+            #[cfg(target_os = "macos")]
+            {
+                Command::new("/Applications/CloudCompare.app/Contents/MacOS/CloudCompare")
+            }
+            #[cfg(target_os = "windows")]
+            {
+                Command::new("C:\\Program Files\\CloudCompare\\CloudCompare.exe")
+            }
+            #[cfg(target_os = "linux")]
+            Command::new("CloudCompare")
+        }
     }
-    #[cfg(target_os = "windows")]
-    {
-        Command::new("C:\\Program Files\\CloudCompare\\CloudCompare.exe")
-    }
-    #[cfg(target_os = "linux")]
-    Command::new("CloudCompare")
 }
 
 /// Command line arguments
@@ -49,21 +54,25 @@ pub fn command() -> Command {
 #[clap(author, version, about)]
 struct Args {
     /// point cloud file name of the point cloud to be input (.txt, .csv, .las, .xyz, .e57 supported)
-    #[clap(long)]
-    input: String,
+    #[clap(short = 'i', long)]
+    input_file: String,
 
     /// folder name to be output
-    #[clap(long)]
-    output: String,
+    #[clap(short = 'o', long)]
+    output_directory: String,
 
     /// apply global shift
     #[clap(long, default_value_t = 0)]
     global_shift: u8,
+
+    /// path to CloudCompare
+    #[clap(long)]
+    cloud_compare_path: Option<String>,
 }
 
 /// detect if CloudCompare is installed by executing command
-pub fn detect_cloudcompare_exists() -> anyhow::Result<String> {
-    let mut cmd = command();
+pub fn detect_cloudcompare_exists(path: Option<&String>) -> anyhow::Result<String> {
+    let mut cmd = command(path);
     cmd.arg("-SILENT");
     let output = cmd.output()?;
     let msg = std::str::from_utf8(&output.stdout)?;
@@ -72,11 +81,12 @@ pub fn detect_cloudcompare_exists() -> anyhow::Result<String> {
 
 /// convert pcd file to txt file with CloudCompare
 pub fn convert_pcd_file_to_txt<S0: AsRef<OsStr>, S1: AsRef<OsStr>>(
+    cmd: Option<&String>,
     input_file_path: S0,
     out_txt_path: S1,
     drop_global_shift: bool,
 ) -> anyhow::Result<()> {
-    let mut cmd = command();
+    let mut cmd = command(cmd);
     cmd.arg("-SILENT")
         .arg("-AUTO_SAVE")
         .arg("OFF")
@@ -126,6 +136,7 @@ type LODKey = (i32, i32, i32);
 
 /// process level of detail
 pub async fn process_lod<F0, F1, Fut0, Fut1>(
+    exec_path: Option<&String>,
     input_file_path: &String,
     callback_per_unit: F0,
     callback_per_lod: F1,
@@ -156,7 +167,12 @@ where
 
     println!("Converting pcd to txt...");
 
-    convert_pcd_file_to_txt(&full_input_file_path, &seed_file_path, use_global_shift)?;
+    convert_pcd_file_to_txt(
+        exec_path,
+        &full_input_file_path,
+        &seed_file_path,
+        use_global_shift,
+    )?;
 
     println!("Converting pcd to txt is done!");
 
@@ -251,16 +267,17 @@ where
 async fn handler() -> anyhow::Result<()> {
     let args: Args = Args::parse();
 
-    let i_point_cloud = args.input;
-    let o_point_cloud = &args.output;
+    let input_file = args.input_file;
+    let output_directory = &args.output_directory;
     let use_global_shift = args.global_shift == 1;
+    let exec_path = args.cloud_compare_path.as_ref();
 
     ensure!(
-        detect_cloudcompare_exists().is_ok(),
+        detect_cloudcompare_exists(exec_path).is_ok(),
         "CloudCompare is not installed!"
     );
 
-    let output_path = canonicalize(o_point_cloud)?;
+    let output_path = canonicalize(output_directory)?;
     ensure!(output_path.is_dir(), "Output path must be directory");
     let output_path = &output_path;
 
@@ -302,7 +319,7 @@ async fn handler() -> anyhow::Result<()> {
 
         Ok(())
     };
-    process_lod(&i_point_cloud, per_unit, per_lod, use_global_shift).await?;
+    process_lod(exec_path, &input_file, per_unit, per_lod, use_global_shift).await?;
 
     Ok(())
 }
@@ -323,7 +340,7 @@ async fn main() {
 mod tests {
     #[test]
     fn detect_app_exists() {
-        let r = super::detect_cloudcompare_exists();
+        let r = super::detect_cloudcompare_exists(None);
         assert!(r.is_ok());
     }
 }
