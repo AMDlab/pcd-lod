@@ -61,11 +61,11 @@ struct Args {
     #[clap(short = 'o', long)]
     output_directory: String,
 
-    /// apply global shift
+    /// apply global shift or not (0: no, 1: yes)
     #[clap(long, default_value_t = 0)]
     global_shift: u8,
 
-    /// path to CloudCompare
+    /// (Optional) execute path to CloudCompare
     #[clap(long)]
     cloud_compare_path: Option<String>,
 }
