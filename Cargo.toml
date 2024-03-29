@@ -1,8 +1,9 @@
 [package]
 authors = ["Masatatsu Nakamura <masatatsu.nakamura@gmail.com>"]
-edition = "2018"
+edition = "2021"
 name = "pcd-lod"
 version = "0.1.0"
+description = "A LOD generator for point cloud files"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
