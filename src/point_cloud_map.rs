@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use crate::{bounding_box::BoundingBox, point::Point, point_cloud_unit::PointCloudUnit, LODKey};
+use crate::{
+    prelude::{BoundingBox, Point, PointCloudUnit},
+    LODKey,
+};
 
 pub struct PointCloudMap {
     lod: u32,

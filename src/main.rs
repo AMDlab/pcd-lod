@@ -1,14 +1,9 @@
 use anyhow::ensure;
-use bounding_box::BoundingBox;
 use clap::Parser;
 
-use encoder::Encoder;
 use image::DynamicImage;
-use meta::{Coordinates, Meta};
-use point::Point;
-use point_cloud_map::*;
 
-use rayon::prelude::ParallelIterator;
+use pcd_lod::prelude::*;
 
 use std::convert::From;
 
@@ -19,14 +14,6 @@ use std::io::{prelude::*, BufReader};
 use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-
-pub mod bounding_box;
-pub mod color;
-pub mod encoder;
-pub mod meta;
-pub mod point;
-pub mod point_cloud_map;
-pub mod point_cloud_unit;
 
 /// get Command instance for CloudCompare
 /// change the path according to each OS
@@ -130,9 +117,6 @@ pub fn read_points_from_txt(path: &std::path::Path) -> anyhow::Result<Vec<Point>
         _ => Err(anyhow::anyhow!("failed to open file")),
     }
 }
-
-/// key represents level of detail for hash map
-type LODKey = (i32, i32, i32);
 
 /// process level of detail
 pub async fn process_lod<F0, F1, Fut0, Fut1>(

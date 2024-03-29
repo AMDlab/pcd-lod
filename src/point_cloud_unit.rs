@@ -1,4 +1,4 @@
-use crate::point::Point;
+use crate::prelude::Point;
 
 pub struct PointCloudUnit {
     pub points: Vec<Point>,

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::bounding_box::BoundingBox;
+use crate::prelude::BoundingBox;
 
 pub type Coordinates = HashMap<u32, HashMap<String, BoundingBox>>;
 

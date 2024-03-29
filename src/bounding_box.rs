@@ -3,7 +3,7 @@ use std::iter::FromIterator;
 use nalgebra::{zero, Point3, Vector3};
 use serde::{Deserialize, Serialize};
 
-use crate::point::Point;
+use crate::prelude::Point;
 
 /// A bounding box struct that holds the minimum and maximum points of a box.
 #[derive(Clone, Serialize, Deserialize)]

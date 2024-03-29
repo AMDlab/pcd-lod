@@ -1,7 +1,7 @@
 use nalgebra::Point3;
 use serde::{Deserialize, Serialize};
 
-use crate::color::Color;
+use crate::prelude::Color;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Point {

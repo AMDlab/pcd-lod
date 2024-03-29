@@ -2,7 +2,7 @@ use std::iter::FromIterator;
 
 use image::{Rgba, Rgba32FImage, RgbaImage};
 
-use crate::{bounding_box::BoundingBox, color::Color, point::Point};
+use crate::{prelude::BoundingBox, prelude::Color, prelude::Point};
 
 /// Point cloud encoder to generate images from point cloud data
 pub struct Encoder {
