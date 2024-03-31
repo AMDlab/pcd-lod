@@ -76,11 +76,7 @@ async fn handler() -> anyhow::Result<()> {
         Ok(())
     };
     let per_lod = |lod, bounds, coordinates| async move {
-        let meta = Meta {
-            lod,
-            bounds,
-            coordinates,
-        };
+        let meta = Meta::new(lod, bounds, coordinates);
         let json = serde_json::to_string(&meta).unwrap();
 
         let mut meta_file_path = output_path.clone();
