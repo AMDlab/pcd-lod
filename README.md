@@ -35,3 +35,7 @@ The files outputted in the specified folder by the pcd-lod generator include:
 - `meta.json` (the number of LOD subdivisions and the bounding box information of the point clouds contained in each unit of the octree)
 - PNG files indicating the positions of point clouds in each unit of the octree _(e.g., `1/0-3-1.png` where the folder name indicates the level of division, and the numbers in the file name represent the octree's address)_
 - PNG files indicating the colors of point clouds in each unit of the octree _(e.g., `1/0-3-1-color.png` where the folder name indicates the level of division, and the numbers in the file name represent the octree's address)_
+
+## Visualization
+
+We are releasing a front-end React component called [pcd-viewer](https://github.com/AMDlab/rcde-viewer) that allows for the visualization of LOD in web browsers.
