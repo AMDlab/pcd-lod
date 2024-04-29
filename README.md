@@ -4,6 +4,9 @@ A generator project for converting point cloud files into a Level of Details (LO
 
 The entered point cloud files `(.txt, .csv, .las, .xyz, .e57)` are subdivided according to the structure of an octree, until a certain density is reached.
 
+Internally, this calls [CloudCompare](https://github.com/cloudcompare/cloudcompare) to support various point cloud formats.
+Please note that CloudCompare must be installed prior to using this library. 
+
 ## Usage
 
 ```bash
