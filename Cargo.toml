@@ -1,5 +1,5 @@
 [package]
-# authors = []
+authors = ["THE UNIVERSITY OF TOKYO, SCHOOL OF ENGINEERING Construction System Management for Innovation"]
 edition = "2021"
 name = "pcd-lod"
 version = "0.1.0"
