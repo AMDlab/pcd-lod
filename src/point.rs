@@ -8,6 +8,7 @@ use crate::prelude::Color;
 pub struct Point {
     pub position: Point3<f64>,
     pub color: Option<Color>,
+    pub intensity: Option<f64>,
 }
 
 impl Point {
@@ -19,26 +20,38 @@ impl Point {
         let r = split.next();
         let g = split.next();
         let b = split.next();
-        match (x, y, z, r, g, b) {
-            (Some(x), Some(y), Some(z), Some(r), Some(g), Some(b)) => {
-                let x = x.parse().unwrap();
-                let y = y.parse().unwrap();
-                let z = z.parse().unwrap();
-                let r = r.parse().unwrap();
-                let g = g.parse().unwrap();
-                let b = b.parse().unwrap();
+        let intensity = split.next();
+        match (x, y, z, r, g, b, intensity) {
+            (Some(x), Some(y), Some(z), r, g, b, intensity) => {
+                let x = x.parse()?;
+                let y = y.parse()?;
+                let z = z.parse()?;
+
+                let (color, intensity) = match (r, g, b, intensity) {
+                    (Some(r), Some(g), Some(b), Some(intensity)) => {
+                        let r = r.parse()?;
+                        let g = g.parse()?;
+                        let b = b.parse()?;
+                        let intensity = intensity.parse()?;
+                        (Some(Color::new(r, g, b)), Some(intensity))
+                    }
+                    (Some(r), Some(g), Some(b), None) => {
+                        let r = r.parse()?;
+                        let g = g.parse()?;
+                        let b = b.parse()?;
+                        (Some(Color::new(r, g, b)), None)
+                    }
+                    (Some(intensity), _, _, _) => {
+                        let intensity = intensity.parse()?;
+                        (None, Some(intensity))
+                    }
+                    _ => (None, None),
+                };
+
                 Ok(Point {
                     position: Point3::new(x, y, z),
-                    color: Some(Color::new(r, g, b)),
-                })
-            }
-            (Some(x), Some(y), Some(z), _, _, _) => {
-                let x = x.parse().unwrap();
-                let y = y.parse().unwrap();
-                let z = z.parse().unwrap();
-                Ok(Point {
-                    position: Point3::new(x, y, z),
-                    color: None,
+                    color,
+                    intensity,
                 })
             }
             _ => Err(anyhow::anyhow!("Invalid point format")),
