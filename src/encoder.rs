@@ -45,13 +45,15 @@ impl Encoder {
             let x = idx as u32 % side;
             let pos = p.position;
 
-            let ix = (pos.x * (u8::MAX as f64)).floor() as u8;
-            let iy = (pos.y * (u8::MAX as f64)).floor() as u8;
-            let iz = (pos.z * (u8::MAX as f64)).floor() as u8;
+            let ix = normalized_to_8bit(pos.x);
+            let iy = normalized_to_8bit(pos.y);
+            let iz = normalized_to_8bit(pos.z);
             let c = p.color.unwrap_or(Color::white());
 
+            let intensity = normalized_to_8bit(p.intensity.unwrap_or(1.0));
+
             position.put_pixel(x, y, Rgba([ix, iy, iz, u8::MAX]));
-            color.put_pixel(x, y, Rgba([c.r(), c.g(), c.b(), u8::MAX]));
+            color.put_pixel(x, y, Rgba([c.r(), c.g(), c.b(), intensity]));
         });
 
         (position, color)
@@ -125,4 +127,9 @@ fn encode_8bit_4channels(v01: f64) -> (u8, u8, u8, u8) {
     let p1 = ((iu >> 8) & 0xff) as u8;
     let p0 = (iu & 0xff) as u8;
     (p0, p1, p2, p3)
+}
+
+/// Convert normalized f64 (0.0 ~ 1.0) to u8 (0 ~ 255)
+fn normalized_to_8bit(v01: f64) -> u8 {
+    (v01 * (u8::MAX as f64)).floor() as u8
 }
