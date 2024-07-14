@@ -24,6 +24,7 @@ impl Encoder {
                 Point {
                     position: normalized.into(),
                     color: pt.color,
+                    intensity: pt.intensity,
                 }
             })
             .collect();
