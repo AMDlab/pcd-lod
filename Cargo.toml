@@ -13,12 +13,33 @@ readme = "README.md"
 anyhow = "~1.0.81"
 clap = { version = "4.5.3", features = ["derive"] }
 image = { version = "0.25.2", features = ["webp"] }
-nalgebra = { version = "0.33.0", features = ["serde-serialize"] }
+nalgebra = { version = "0.33.0", features = ["serde-serialize", "glam027", "glam028"] }
+num-traits = "0.2.19"
+itertools = { version = "0.13.0" }
 rand = { version = "0.8" }
 rayon = "1.10.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
+bevy = { version = "0.14.2", optional = true }
+bevy_infinite_grid = { version = "0.13.0", optional = true }
+bevy_panorbit_camera = { version = "0.19.3", optional = true }
+bevy_points = { version = "0.6.0", optional = true }
 
 [dev-dependencies]
 serial_test = "*"
+
+[features]
+# default = []
+default = ["bevy"] # for debugging example
+bevy = [
+  "dep:bevy",
+  "dep:bevy_infinite_grid",
+  "dep:bevy_panorbit_camera",
+  "dep:bevy_points"
+]
+
+[[example]]
+name = "sampling"
+path = "examples/sampling.rs"
+required-features = ["bevy"]
