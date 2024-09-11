@@ -55,13 +55,9 @@ impl PointCloudMap {
                     .par_iter()
                     .map(|v| {
                         let position = v.position;
-                        let x = position.x;
-                        let y = position.y;
-                        let z = position.z;
-                        let ix = ((x - min.x) / unit).floor() as i32;
-                        let iy = ((y - min.y) / unit).floor() as i32;
-                        let iz = ((z - min.z) / unit).floor() as i32;
-                        let key = (ix, iy, iz);
+                        let u = (position - min) / unit;
+                        let k = u.map(|v| v.floor().min(div - 1.) as i32);
+                        let key = (k.x, k.y, k.z);
                         (key, v.clone())
                     })
                     .collect();
