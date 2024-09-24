@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::prelude::Point;
 
 /// A bounding box struct that holds the minimum and maximum points of a box.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoundingBox {
     pub min: Point3<f64>,
     pub max: Point3<f64>,

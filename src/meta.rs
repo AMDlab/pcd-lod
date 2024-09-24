@@ -8,7 +8,7 @@ use crate::prelude::BoundingBox;
 pub type Coordinates = HashMap<u32, HashMap<String, BoundingBox>>;
 
 /// Meta representation of the processed lod data
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Meta {
     version: String,
     pub lod: u32,
@@ -24,5 +24,21 @@ impl Meta {
             bounds,
             coordinates,
         }
+    }
+
+    pub fn version(&self) -> &str {
+        &self.version
+    }
+
+    pub fn lod(&self) -> u32 {
+        self.lod
+    }
+
+    pub fn bounds(&self) -> &BoundingBox {
+        &self.bounds
+    }
+
+    pub fn coordinates(&self) -> &Coordinates {
+        &self.coordinates
     }
 }

@@ -931,6 +931,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_polyline"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f54091a26c01aa225f771e1a9b12eb2eadabfec359b67aeab75a46f7d3437647"
+dependencies = [
+ "bevy",
+ "bitflags 2.6.0",
+ "bytemuck",
+]
+
+[[package]]
 name = "bevy_ptr"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3482,6 +3493,7 @@ dependencies = [
  "bevy_infinite_grid",
  "bevy_panorbit_camera",
  "bevy_points",
+ "bevy_polyline",
  "clap",
  "image",
  "itertools 0.13.0",
