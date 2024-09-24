@@ -29,7 +29,7 @@ impl<T, P> PoissonDiskSampling<T, P> {
 impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3>>
     PoissonDiskSampling<T, P>
 {
-    pub fn sample(&self, inputs: Vec<P>, radius: T) -> Vec<P> {
+    pub fn sample(&self, inputs: &[P], radius: T) -> Vec<P> {
         let (min, max) = min_max(inputs.iter().map(|pt| pt.position()));
         let size = max - min;
 
