@@ -23,7 +23,7 @@ use bevy_polyline::{
 use image::{codecs::png, ImageDecoder};
 use itertools::Itertools;
 use nalgebra::{coordinates, Point2, Point3, Vector2, Vector3};
-use pcd_lod::prelude::{Meta, Point, PoissonDiskSampling};
+use pcd_lod::prelude::{BoundingBox, Meta, Point, PoissonDiskSampling};
 
 const RADIUS: f64 = 5.;
 // const RADIUS: f64 = 20.;
@@ -55,7 +55,7 @@ fn setup(
     mut polylines: ResMut<Assets<Polyline>>,
 ) {
     let root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-    let dir = format!("{}/examples", root);
+    let dir = format!("{}/examples/output", root);
     let meta: Meta =
         serde_json::from_str(&fs::read_to_string(format!("{}/meta.json", dir)).unwrap()).unwrap();
 
@@ -64,10 +64,11 @@ fn setup(
     let center: Vec3 = bounds.center().cast::<f32>().into();
     let transform = Transform::from_translation(-center);
 
-    for level in 0..lod {
-        let ox = Vec3::X * level as f32 * bounds.size().x as f32;
-        let transform = transform * Transform::from_translation(ox);
-
+    let spawn_bounding_box = |commands: &mut Commands,
+                              polylines: &mut ResMut<'_, Assets<Polyline>>,
+                              polyline_materials: &mut ResMut<'_, Assets<PolylineMaterial>>,
+                              bounds: BoundingBox,
+                              transform: Transform| {
         let p00 = Point3::new(bounds.min.x, bounds.min.y, bounds.min.z);
         let p01 = Point3::new(bounds.max.x, bounds.min.y, bounds.min.z);
         let p02 = Point3::new(bounds.max.x, bounds.max.y, bounds.min.z);
@@ -106,22 +107,45 @@ fn setup(
                 ..default()
             });
         });
+    };
+
+    for level in 0..lod {
+        let ox = Vec3::X * level as f32 * bounds.size().x as f32;
+        let transform = transform * Transform::from_translation(ox);
+        spawn_bounding_box(
+            &mut commands,
+            &mut polylines,
+            &mut polyline_materials,
+            bounds.clone(),
+            transform,
+        );
 
         let coordinates = meta.coordinates().get(&level);
         if let Some(coordinates) = coordinates {
             coordinates.iter().for_each(|(k, bb)| {
+                spawn_bounding_box(
+                    &mut commands,
+                    &mut polylines,
+                    &mut polyline_materials,
+                    bb.clone(),
+                    transform,
+                );
+
                 let path = format!("{}/{}/{}.png", dir, level, k);
                 let im = image::open(path).unwrap();
                 let rgba = im.as_rgba8().unwrap();
-                let points = rgba.pixels().map(|pix| {
-                    let [ix, iy, iz, _] = pix.0;
-                    let fx = ix as f64 / 255.;
-                    let fy = iy as f64 / 255.;
-                    let fz = iz as f64 / 255.;
-                    let v = Vector3::new(fx, fy, fz);
-                    let p = bb.size().component_mul(&v) + bb.min().coords;
-                    p.cast::<f32>().into()
-                }).collect();
+                let points = rgba
+                    .pixels()
+                    .map(|pix| {
+                        let [ix, iy, iz, _] = pix.0;
+                        let fx = ix as f64 / 255.;
+                        let fy = iy as f64 / 255.;
+                        let fz = iz as f64 / 255.;
+                        let v = Vector3::new(fx, fy, fz);
+                        let p = bb.size().component_mul(&v) + bb.min().coords;
+                        p.cast::<f32>().into()
+                    })
+                    .collect();
                 commands.spawn(MaterialMeshBundle {
                     mesh: meshes.add(PointsMesh {
                         vertices: points,
