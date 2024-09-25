@@ -43,19 +43,21 @@ impl PointCloudMap {
     pub fn divide(&self, threshold: usize) -> Self {
         let next_lod = self.lod + 1;
         let div = 2_f64.powf(next_lod as f64);
-        let min = &self.bounds.min;
+        let min = self.bounds.min();
         let unit = self.bounds.max_size() / div;
 
         let mut next = HashMap::new();
 
         self.octree.iter().for_each(|(_k, v)| {
-            if v.points.len() > threshold {
+            // if v.points.len() > threshold {
+            {
                 let pts: Vec<(LODKey, Point)> = v
                     .points
                     .par_iter()
                     .map(|v| {
                         let position = v.position;
                         let u = (position - min) / unit;
+                        // let k = u.map(|v| v.floor().min(div) as i32);
                         let k = u.map(|v| v.floor().min(div - 1.) as i32);
                         let key = (k.x, k.y, k.z);
                         (key, v.clone())
