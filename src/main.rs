@@ -4,8 +4,8 @@ use clap::Parser;
 use image::DynamicImage;
 use pcd_lod::{
     detect_cloudcompare_exists,
-    prelude::{Encoder, Meta, Point},
-    process_lod,
+    prelude::{Encoder, Meta},
+    process_lod, LODUnit,
 };
 
 use std::{
@@ -52,7 +52,15 @@ async fn handler() -> anyhow::Result<()> {
     ensure!(output_path.is_dir(), "Output path must be directory");
     let output_path = &output_path;
 
-    let per_unit = |bbox, pts: Vec<Point>, lod: u32, x: i32, y: i32, z: i32| async move {
+    let per_unit = |unit: LODUnit| async move {
+        let LODUnit {
+            lod,
+            bounding_box: bbox,
+            points: pts,
+            x,
+            y,
+            z,
+        } = unit;
         let encoder = Encoder::new(&pts, Some(bbox));
         // let img = encoder.encode_8bit_quad();
         // let img = DynamicImage::from(img);

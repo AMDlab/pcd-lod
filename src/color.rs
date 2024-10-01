@@ -14,6 +14,12 @@ static WHITE: Color = Color {
     blue: 255,
 };
 
+impl Default for Color {
+    fn default() -> Self {
+        Self::white()
+    }
+}
+
 impl Color {
     pub fn white() -> Self {
         WHITE
@@ -33,5 +39,12 @@ impl Color {
 
     pub fn b(&self) -> u8 {
         self.blue
+    }
+}
+
+#[cfg(feature = "bevy")]
+impl From<Color> for bevy::prelude::Color {
+    fn from(color: Color) -> Self {
+        bevy::prelude::Color::srgb_u8(color.red, color.green, color.blue)
     }
 }

@@ -10,7 +10,8 @@ use std::{
 use anyhow::ensure;
 
 use point::Point;
-use prelude::{BoundingBox, Coordinates, PointCloudMap};
+use prelude::{BoundingBox, Coordinates, PointCloudMap, PoissonDiskSampling};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 mod bounding_box;
 mod color;
@@ -19,6 +20,7 @@ mod meta;
 mod point;
 mod point_cloud_map;
 mod point_cloud_unit;
+mod poisson_disk_sampling;
 
 /// key represents level of detail for hash map
 type LODKey = (i32, i32, i32);
@@ -31,6 +33,7 @@ pub mod prelude {
     pub use crate::point::*;
     pub use crate::point_cloud_map::*;
     pub use crate::point_cloud_unit::*;
+    pub use crate::poisson_disk_sampling::*;
 }
 
 /// get Command instance for CloudCompare
@@ -115,6 +118,16 @@ fn read_points_from_txt(path: &std::path::Path) -> anyhow::Result<Vec<Point>> {
     }
 }
 
+/// unit result of level of detail
+pub struct LODUnit {
+    pub lod: u32,
+    pub bounding_box: BoundingBox,
+    pub points: Vec<Point>,
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+
 /// process level of detail
 pub async fn process_lod<F0, F1, Fut0, Fut1>(
     exec_path: Option<&String>,
@@ -124,7 +137,7 @@ pub async fn process_lod<F0, F1, Fut0, Fut1>(
     use_global_shift: bool,
 ) -> anyhow::Result<()>
 where
-    F0: Fn(BoundingBox, Vec<Point>, u32, i32, i32, i32) -> Fut0,
+    F0: Fn(LODUnit) -> Fut0,
     F1: Fn(u32, BoundingBox, Coordinates) -> Fut1,
     Fut0: Future<Output = anyhow::Result<()>>,
     Fut1: Future<Output = anyhow::Result<()>>,
@@ -175,13 +188,22 @@ where
 
     let points = read_points_from_txt(Path::new(&path))?;
     let bounds = BoundingBox::from_iter(points.iter().map(|p| p.position));
-    let point_count_threshold = 2_u32.pow(14) as usize;
+    let point_count_threshold = 2_u32.pow(14) as usize; // 16384
+                                                        // let point_count_threshold = 2_u32.pow(10) as usize;
+    let side = (point_count_threshold as f64).sqrt();
 
     let mut coordinates = Coordinates::new();
 
     println!("Start processing...");
 
     // create root map
+    let sampler = PoissonDiskSampling::<f64, Point>::new();
+    let size = bounds.size();
+    let max_size = size.x.max(size.y).max(size.z);
+    let calculate_sampling_radius = |lod: u32| {
+        let unit_size = max_size / (lod as f64);
+        unit_size / side
+    };
     let mut parent_map = {
         let map = PointCloudMap::root(bounds.clone(), &points);
         let points = map.map().get(&(0, 0, 0));
@@ -196,9 +218,17 @@ where
             let pts = if under_threshold {
                 unit.points.clone()
             } else {
-                unit.uniform_sample_points(point_count_threshold)
+                sampler.sample(unit.points(), calculate_sampling_radius(1))
             };
-            callback_per_unit(map.bounds().clone(), pts, 0, 0, 0, 0).await?;
+            callback_per_unit(LODUnit {
+                lod: 0,
+                bounding_box: map.bounds().clone(),
+                points: pts,
+                x: 0,
+                y: 0,
+                z: 0,
+            })
+            .await?;
         }
         callback_per_lod(map.lod() + 1, bounds.clone(), coordinates.clone()).await?;
         map
@@ -206,31 +236,50 @@ where
 
     loop {
         let next = parent_map.divide(point_count_threshold);
+        let lod = 2_u32.pow(next.lod());
+        let sampling_radius = calculate_sampling_radius(lod);
 
-        let mut all_under_threshold = true;
+        let has_over_threshold = next
+            .map()
+            .iter()
+            .any(|u| u.1.points.len() >= point_count_threshold);
 
-        for (k, v) in next.map().iter() {
+        let samples = next
+            .map()
+            .par_iter()
+            .map(|(k, u)| {
+                let pts = if !has_over_threshold {
+                    u.points.clone()
+                } else {
+                    sampler.sample(u.points(), sampling_radius)
+                    // u.points.clone()
+                };
+                (k, pts)
+            })
+            .collect::<Vec<_>>();
+
+        for (k, pts) in samples.into_iter() {
             let (x, y, z) = k;
             let c_key = format!("{}-{}-{}", x, y, z);
-            let under_threshold = v.points.len() < point_count_threshold;
-            let pts = if under_threshold {
-                v.points.clone()
-            } else {
-                v.uniform_sample_points(point_count_threshold)
-            };
             let bbox = BoundingBox::from_iter(pts.iter());
             coordinates
                 .entry(next.lod())
                 .or_default()
                 .entry(c_key)
                 .or_insert(bbox.clone());
-            callback_per_unit(bbox, pts, next.lod(), *x, *y, *z).await?;
-
-            all_under_threshold = all_under_threshold && under_threshold;
+            callback_per_unit(LODUnit {
+                lod: next.lod(),
+                bounding_box: bbox,
+                points: pts,
+                x: *x,
+                y: *y,
+                z: *z,
+            })
+            .await?;
         }
         callback_per_lod(next.lod() + 1, bounds.clone(), coordinates.clone()).await?;
 
-        if all_under_threshold {
+        if !has_over_threshold {
             break;
         }
 
