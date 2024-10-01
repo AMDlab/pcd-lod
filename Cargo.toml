@@ -31,8 +31,8 @@ bevy_polyline = { version = "0.10", optional = true }
 serial_test = "*"
 
 [features]
-# default = []
-default = ["bevy"] # for debugging example
+default = []
+# default = ["bevy"] # for debugging example
 bevy = [
   "dep:bevy",
   "dep:bevy_infinite_grid",
