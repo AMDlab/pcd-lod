@@ -45,3 +45,8 @@ bevy = [
 name = "sampling"
 path = "examples/sampling.rs"
 required-features = ["bevy"]
+
+[[example]]
+name = "lod"
+path = "examples/lod.rs"
+required-features = ["bevy"]
