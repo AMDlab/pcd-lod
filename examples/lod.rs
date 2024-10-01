@@ -25,9 +25,6 @@ use itertools::Itertools;
 use nalgebra::{coordinates, Point2, Point3, Vector2, Vector3};
 use pcd_lod::prelude::{BoundingBox, Meta, Point, PoissonDiskSampling};
 
-const RADIUS: f64 = 5.;
-// const RADIUS: f64 = 20.;
-
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)

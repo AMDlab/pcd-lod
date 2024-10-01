@@ -38,12 +38,12 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3>>
         // "Understanding the Cell Size" section
         let cell_size = radius / T::from_usize(3).unwrap().sqrt();
         let half_radius = radius / T::from_usize(2).unwrap();
-        let radius_squared = radius * radius;
-        let radius_2_squared = (radius * T::from_usize(2).unwrap()).powi(2);
+        // let radius_squared = radius * radius;
+        // let radius_2_squared = (radius * T::from_usize(2).unwrap()).powi(2);
 
         let grid_size = size.map(|x| (x / cell_size).ceil().max(T::one()));
         let u_grid_size = grid_size.map(|x| x.to_usize().unwrap());
-        println!("grid_size: {:?}", u_grid_size);
+        // println!("grid_size: {:?}", u_grid_size);
         let mut grid: Vec<Vec<Vec<Grid<'_, P>>>> = vec![];
         for _ in 0..u_grid_size.z {
             let mut gz = vec![];
@@ -86,7 +86,7 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3>>
             })
             .collect();
 
-        println!("indices: {:?}", indices.len());
+        // println!("indices: {:?}", indices.len());
 
         let mut actives = vec![];
 

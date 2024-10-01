@@ -177,8 +177,8 @@ where
 
     let points = read_points_from_txt(Path::new(&path))?;
     let bounds = BoundingBox::from_iter(points.iter().map(|p| p.position));
-    // let point_count_threshold = 2_u32.pow(14) as usize; // 16384
-    let point_count_threshold = 2_u32.pow(12) as usize; // 16384
+    let point_count_threshold = 2_u32.pow(14) as usize; // 16384
+    // let point_count_threshold = 2_u32.pow(10) as usize;
     let side = (point_count_threshold as f64).sqrt();
 
     let mut coordinates = Coordinates::new();
@@ -189,6 +189,10 @@ where
     let sampler = PoissonDiskSampling::<f64, Point>::new();
     let size = bounds.size();
     let max_size = size.x.max(size.y).max(size.z);
+    let calculate_sampling_radius = |lod: u32| {
+        let unit_size = max_size / (lod as f64);
+        unit_size / side
+    };
     let mut parent_map = {
         let map = PointCloudMap::root(bounds.clone(), &points);
         let points = map.map().get(&(0, 0, 0));
@@ -203,7 +207,7 @@ where
             let pts = if under_threshold {
                 unit.points.clone()
             } else {
-                sampler.sample(unit.points(), max_size / 128.)
+                sampler.sample(unit.points(), calculate_sampling_radius(1))
             };
             callback_per_unit(map.bounds().clone(), pts, 0, 0, 0, 0).await?;
         }
@@ -214,8 +218,7 @@ where
     loop {
         let next = parent_map.divide(point_count_threshold);
         let lod = 2_u32.pow(next.lod());
-        let unit_size = max_size / (lod as f64);
-        let sampling_radius = unit_size / side;
+        let sampling_radius = calculate_sampling_radius(lod);
 
         let has_over_threshold = next
             .map()
