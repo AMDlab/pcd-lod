@@ -1,15 +1,6 @@
-use std::{
-    fs::{self, File},
-    io::BufReader,
-};
+use std::fs;
 
-use bevy::{
-    prelude::*,
-    render::{
-        camera::ScalingMode,
-        mesh::{PrimitiveTopology, VertexAttributeValues},
-    },
-};
+use bevy::{prelude::*, render::camera::ScalingMode};
 use bevy_infinite_grid::{InfiniteGridBundle, InfiniteGridPlugin};
 
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
@@ -20,10 +11,8 @@ use bevy_polyline::{
     prelude::{Polyline, PolylineBundle, PolylineMaterial},
     PolylinePlugin,
 };
-use image::{codecs::png, ImageDecoder};
-use itertools::Itertools;
-use nalgebra::{coordinates, Point2, Point3, Vector2, Vector3};
-use pcd_lod::prelude::{BoundingBox, Meta, Point, PoissonDiskSampling};
+use nalgebra::{Point3, Vector3};
+use pcd_lod::prelude::{BoundingBox, Meta};
 
 fn main() {
     App::new()

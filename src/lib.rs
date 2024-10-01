@@ -11,6 +11,7 @@ use anyhow::ensure;
 
 use point::Point;
 use prelude::{BoundingBox, Coordinates, PointCloudMap, PoissonDiskSampling};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 mod bounding_box;
 mod color;
@@ -178,7 +179,7 @@ where
     let points = read_points_from_txt(Path::new(&path))?;
     let bounds = BoundingBox::from_iter(points.iter().map(|p| p.position));
     let point_count_threshold = 2_u32.pow(14) as usize; // 16384
-    // let point_count_threshold = 2_u32.pow(10) as usize;
+                                                        // let point_count_threshold = 2_u32.pow(10) as usize;
     let side = (point_count_threshold as f64).sqrt();
 
     let mut coordinates = Coordinates::new();
@@ -225,15 +226,23 @@ where
             .iter()
             .any(|u| u.1.points.len() >= point_count_threshold);
 
-        for (k, u) in next.map().iter() {
+        let samples = next
+            .map()
+            .par_iter()
+            .map(|(k, u)| {
+                let pts = if !has_over_threshold {
+                    u.points.clone()
+                } else {
+                    sampler.sample(u.points(), sampling_radius)
+                    // u.points.clone()
+                };
+                (k, pts)
+            })
+            .collect::<Vec<_>>();
+
+        for (k, pts) in samples.into_iter() {
             let (x, y, z) = k;
             let c_key = format!("{}-{}-{}", x, y, z);
-            let pts = if !has_over_threshold {
-                u.points.clone()
-            } else {
-                sampler.sample(u.points(), sampling_radius)
-                // u.points.clone()
-            };
             let bbox = BoundingBox::from_iter(pts.iter());
             coordinates
                 .entry(next.lod())
