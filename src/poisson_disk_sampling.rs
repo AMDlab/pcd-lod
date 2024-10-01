@@ -1,9 +1,7 @@
 use std::collections::HashSet;
 
 use itertools::Itertools;
-use nalgebra::{
-    allocator::Allocator, DefaultAllocator, DimName, OPoint, OVector, RealField, Scalar, U3,
-};
+use nalgebra::{allocator::Allocator, DefaultAllocator, DimName, OPoint, OVector, RealField, U3};
 
 use crate::point::Point;
 
@@ -58,7 +56,7 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3>>
         }
 
         let index = |point: &OPoint<T, U3>| {
-            let n = (point.coords - min);
+            let n = point.coords - min;
             n.map(|x| (x / cell_size).floor().to_usize().unwrap())
         };
 
@@ -114,15 +112,13 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3>>
                                 }
                                 let x = i.x as isize + dx;
                                 if 0 <= x && x < u_grid_size.x as isize {
-                                    match grid[z as usize][y as usize][x as usize].representative()
+                                    if let Some(q) =
+                                        grid[z as usize][y as usize][x as usize].representative()
                                     {
-                                        Some(q) => {
-                                            let dist = p.position() - q.position();
-                                            if dist.norm() <= radius {
-                                                return false;
-                                            }
+                                        let dist = p.position() - q.position();
+                                        if dist.norm() <= radius {
+                                            return false;
                                         }
-                                        _ => {}
                                     }
                                 }
                             }
@@ -134,7 +130,7 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3>>
             true
         };
 
-        let i = indices.iter().next().unwrap().clone();
+        let i = *indices.iter().next().unwrap();
         indices.remove(&i);
         let start = grid[i.2][i.1][i.0].candidates().first().unwrap().clone();
         insert(start.clone(), &mut actives, &mut grid, &mut indices);
@@ -142,7 +138,7 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3>>
         while !indices.is_empty() {
             let current = match actives.is_empty() {
                 true => {
-                    let i = indices.iter().next().unwrap().clone();
+                    let i = *indices.iter().next().unwrap();
                     indices.remove(&i);
                     let next = grid[i.2][i.1][i.0].candidates().iter().find_map(|p| {
                         if is_valid(p, &grid) {
@@ -162,7 +158,7 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3>>
                     // insert(next.clone(), &mut actives, &mut grid, &mut indices);
                     continue;
                 }
-                false => actives.get(0).unwrap(),
+                false => actives.first().unwrap(),
             };
             let i = index(current.position());
             let neighbor_indices = (-1..=1)
@@ -205,17 +201,16 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3>>
 
             let next = neighbor_indices.into_iter().find_map(|(x, y, z)| {
                 let cand = grid[z][y][x].candidates();
-                match cand.into_iter().find(|q| {
-                    let dist_squared = (current.position() - q.position()).norm_squared();
-                    // radius_squared <= dist_squared && dist_squared <= radius_2_squared
-                    half_radius <= dist_squared.sqrt()
-                        && dist_squared.sqrt() <= radius
-                        && is_valid(q, &grid)
-                    // is_valid(q, &grid)
-                }) {
-                    Some(next) => Some((*next).clone()),
-                    _ => None,
-                }
+                cand.iter()
+                    .find(|q| {
+                        let dist_squared = (current.position() - q.position()).norm_squared();
+                        // radius_squared <= dist_squared && dist_squared <= radius_2_squared
+                        half_radius <= dist_squared.sqrt()
+                            && dist_squared.sqrt() <= radius
+                            && is_valid(q, &grid)
+                        // is_valid(q, &grid)
+                    })
+                    .map(|next| (*next).clone())
             });
 
             match next {

@@ -118,6 +118,16 @@ fn read_points_from_txt(path: &std::path::Path) -> anyhow::Result<Vec<Point>> {
     }
 }
 
+/// unit result of level of detail
+pub struct LODUnit {
+    pub lod: u32,
+    pub bounding_box: BoundingBox,
+    pub points: Vec<Point>,
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+
 /// process level of detail
 pub async fn process_lod<F0, F1, Fut0, Fut1>(
     exec_path: Option<&String>,
@@ -127,7 +137,7 @@ pub async fn process_lod<F0, F1, Fut0, Fut1>(
     use_global_shift: bool,
 ) -> anyhow::Result<()>
 where
-    F0: Fn(BoundingBox, Vec<Point>, u32, i32, i32, i32) -> Fut0,
+    F0: Fn(LODUnit) -> Fut0,
     F1: Fn(u32, BoundingBox, Coordinates) -> Fut1,
     Fut0: Future<Output = anyhow::Result<()>>,
     Fut1: Future<Output = anyhow::Result<()>>,
@@ -210,7 +220,15 @@ where
             } else {
                 sampler.sample(unit.points(), calculate_sampling_radius(1))
             };
-            callback_per_unit(map.bounds().clone(), pts, 0, 0, 0, 0).await?;
+            callback_per_unit(LODUnit {
+                lod: 0,
+                bounding_box: map.bounds().clone(),
+                points: pts,
+                x: 0,
+                y: 0,
+                z: 0,
+            })
+            .await?;
         }
         callback_per_lod(map.lod() + 1, bounds.clone(), coordinates.clone()).await?;
         map
@@ -249,7 +267,15 @@ where
                 .or_default()
                 .entry(c_key)
                 .or_insert(bbox.clone());
-            callback_per_unit(bbox, pts, next.lod(), *x, *y, *z).await?;
+            callback_per_unit(LODUnit {
+                lod: next.lod(),
+                bounding_box: bbox,
+                points: pts,
+                x: *x,
+                y: *y,
+                z: *z,
+            })
+            .await?;
         }
         callback_per_lod(next.lod() + 1, bounds.clone(), coordinates.clone()).await?;
 

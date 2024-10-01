@@ -1,10 +1,4 @@
-use bevy::{
-    prelude::*,
-    render::{
-        camera::ScalingMode,
-        mesh::{PrimitiveTopology, VertexAttributeValues},
-    },
-};
+use bevy::{prelude::*, render::camera::ScalingMode};
 use bevy_infinite_grid::{InfiniteGridBundle, InfiniteGridPlugin};
 
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
@@ -12,7 +6,7 @@ use bevy_points::{
     material::PointsShaderSettings, mesh::PointsMesh, plugin::PointsPlugin, prelude::PointsMaterial,
 };
 use itertools::Itertools;
-use nalgebra::{Point2, Point3, Vector2};
+use nalgebra::Point3;
 use pcd_lod::prelude::{Point, PoissonDiskSampling};
 
 const RADIUS: f64 = 5.;
@@ -31,13 +25,8 @@ struct AppPlugin;
 
 impl Plugin for AppPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_systems(Startup, setup).add_systems(
-            Update,
-            (
-                // update,
-                close_on_esc
-            ),
-        );
+        app.add_systems(Startup, setup)
+            .add_systems(Update, close_on_esc);
     }
 }
 
