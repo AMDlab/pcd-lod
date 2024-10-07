@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use itertools::Itertools;
 use nalgebra::{allocator::Allocator, DefaultAllocator, DimName, OPoint, OVector, RealField, U3};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::point::Point;
 
@@ -24,7 +25,7 @@ impl<T, P> PoissonDiskSampling<T, P> {
     }
 }
 
-impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3>>
+impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3> + Sync + Send>
     PoissonDiskSampling<T, P>
 {
     pub fn sample(&self, inputs: &[P], radius: T) -> Vec<P> {
@@ -201,8 +202,8 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3>>
 
             let next = neighbor_indices.into_iter().find_map(|(x, y, z)| {
                 let cand = grid[z][y][x].candidates();
-                cand.iter()
-                    .find(|q| {
+                cand.par_iter()
+                    .find_any(|q| {
                         let dist_squared = (current.position() - q.position()).norm_squared();
                         // radius_squared <= dist_squared && dist_squared <= radius_2_squared
                         half_radius <= dist_squared.sqrt()
