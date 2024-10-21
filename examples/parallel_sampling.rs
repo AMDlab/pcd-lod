@@ -92,7 +92,7 @@ fn setup(
     });
 
     let mut sampler = ParallelPoissonDiskSampling::new(points.iter().collect(), RADIUS);
-    for _ in 0..=sampler.max_iterations() {
+    for _ in 0..sampler.max_iterations() {
         let _ = sampler.step();
     }
     let samples = sampler.samples();
@@ -103,12 +103,7 @@ fn setup(
                 .iter()
                 .map(|pt| (pt.position - center).cast::<f32>().into())
                 .collect(),
-            colors: Some(
-                samples
-                    .iter()
-                    .map(|pt| pt.color.unwrap_or_default().into())
-                    .collect(),
-            ),
+            colors: None,
         }),
         material: materials.add(PointsMaterial {
             settings: PointsShaderSettings {
@@ -124,6 +119,31 @@ fn setup(
         }),
         ..Default::default()
     });
+
+    /*
+    commands.spawn(MaterialMeshBundle {
+        mesh: meshes.add(PointsMesh {
+            vertices: samples
+                .iter()
+                .map(|pt| (pt.position - center).cast::<f32>().into())
+                .collect(),
+            colors: None,
+        }),
+        material: materials.add(PointsMaterial {
+            settings: PointsShaderSettings {
+                point_size: RADIUS as f32,
+                opacity: 0.1,
+                color: Color::WHITE.with_alpha(0.25).into(),
+                ..Default::default()
+            },
+            use_vertex_color: false,
+            perspective: true,
+            circle: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    });
+    */
 
     let scale = 5.;
     let orth = Camera3dBundle {

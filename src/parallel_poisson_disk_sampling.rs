@@ -160,12 +160,6 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
                         .par_iter()
                         .find_any(|p| self.is_valid(p))
                         .cloned()
-                    /*
-                    g.candidates()
-                        .iter()
-                        .find(|p| self.is_valid(p))
-                        .cloned()
-                        */
                 })
                 .collect::<Vec<_>>();
             // println!("#next: {}", next.len());
@@ -181,13 +175,13 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
     fn is_valid(&self, p: &Point) -> bool {
         let i = index(p.position(), &self.grid_min, self.grid_cell_size);
 
-        for dz in -1..1 {
+        for dz in -1..=1 {
             let z = i.z as isize + dz;
             if 0 <= z && z < self.grid_count.z as isize {
-                for dy in -1..1 {
+                for dy in -1..=1 {
                     let y = i.y as isize + dy;
                     if 0 <= y && y < self.grid_count.y as isize {
-                        for dx in -1..1 {
+                        for dx in -1..=1 {
                             if dz == 0 && dy == 0 && dx == 0 {
                                 continue;
                             }

@@ -103,13 +103,13 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3> + Sync
 
         let is_valid = |p: &P, grid: &Vec<Vec<Vec<Grid<'_, P>>>>| {
             let i = index(p.position());
-            for dz in -1..1 {
+            for dz in -1..=1 {
                 let z = i.z as isize + dz;
                 if 0 <= z && z < u_grid_size.z as isize {
-                    for dy in -1..1 {
+                    for dy in -1..=1 {
                         let y = i.y as isize + dy;
                         if 0 <= y && y < u_grid_size.y as isize {
-                            for dx in -1..1 {
+                            for dx in -1..=1 {
                                 if dz == 0 && dy == 0 && dx == 0 {
                                     continue;
                                 }
