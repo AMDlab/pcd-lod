@@ -46,7 +46,6 @@ fn setup(
 
     // println!("points: {}", points.len());
 
-    /*
     // project for debug
     let points = points
         .iter()
@@ -56,7 +55,6 @@ fn setup(
             pt
         })
         .collect_vec();
-    */
 
     let center = points
         .iter()

@@ -5,6 +5,7 @@ use nalgebra::{allocator::Allocator, DefaultAllocator, DimName, OPoint, OVector,
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::grid::Grid;
+use crate::misc::min_max;
 use crate::{has_position::HasPosition, point::Point};
 
 #[derive(Debug, Clone)]
@@ -235,21 +236,3 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3> + Sync
     }
 }
 
-fn min_max<'a, T: RealField + Copy + num_traits::ToPrimitive, D: DimName>(
-    inputs: impl Iterator<Item = &'a OPoint<T, D>>,
-) -> (OVector<T, D>, OVector<T, D>)
-where
-    DefaultAllocator: Allocator<D>,
-{
-    let mut min = OVector::<T, D>::from_element(T::max_value().unwrap());
-    let mut max = -min.clone();
-
-    for point in inputs {
-        for i in 0..D::dim() {
-            min[i] = min[i].min(point[i]);
-            max[i] = max[i].max(point[i]);
-        }
-    }
-
-    (min, max)
-}

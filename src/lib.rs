@@ -24,6 +24,7 @@ mod point;
 mod point_cloud_map;
 mod point_cloud_unit;
 mod poisson_disk_sampling;
+pub mod misc;
 
 /// key represents level of detail for hash map
 type LODKey = (i32, i32, i32);
@@ -32,7 +33,6 @@ pub mod prelude {
     pub use crate::bounding_box::*;
     pub use crate::color::*;
     pub use crate::encoder::*;
-    pub use crate::grid::*;
     pub use crate::meta::*;
     pub use crate::parallel_poisson_disk_sampling::*;
     pub use crate::point::*;
