@@ -13,7 +13,6 @@ use crate::{grid::Grid, has_position::HasPosition, misc::min_max, point::Point};
 
 #[derive(Debug)]
 pub struct ParallelPoissonDiskSampling<'a> {
-    inputs: Vec<&'a Point>,
     radius: f64,
     half_radius: f64,
     grid: Vec<Vec<Vec<Grid<'a, Point>>>>,
@@ -86,7 +85,6 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
         let partitions_count = partitions.len();
 
         Self {
-            inputs,
             radius,
             half_radius,
             grid,
