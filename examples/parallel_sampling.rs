@@ -91,7 +91,7 @@ fn setup(
     });
 
     let mut sampler = ParallelPoissonDiskSampling::new(points.iter().collect(), RADIUS);
-    for _ in 0..sampler.max_iterations() {
+    for _ in 0..=sampler.max_iterations() {
         let _ = sampler.step();
     }
     let samples = sampler.samples();

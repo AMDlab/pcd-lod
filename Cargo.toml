@@ -29,6 +29,7 @@ bevy_polyline = { version = "0.10", optional = true }
 
 [dev-dependencies]
 serial_test = "*"
+criterion = { version = "0.5.1" }
 
 [features]
 # default = []
