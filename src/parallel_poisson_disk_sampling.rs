@@ -160,6 +160,7 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
                         .cloned()
                 })
                 .collect::<Vec<_>>();
+            // println!("#next: {}", next.len());
             for pt in next {
                 let i = index(pt.position(), &self.grid_min, self.cell_size);
                 self.grid[i.z][i.y][i.x].set(pt.clone());

@@ -26,6 +26,7 @@ struct AppPlugin;
 impl Plugin for AppPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_systems(Startup, setup)
+            .add_systems(Update, update)
             .add_systems(Update, close_on_esc);
     }
 }
@@ -46,7 +47,6 @@ fn setup(
 
     // println!("points: {}", points.len());
 
-    /*
     // project for debug
     let points = points
         .iter()
@@ -56,7 +56,6 @@ fn setup(
             pt
         })
         .collect_vec();
-    */
 
     let center = points
         .iter()
@@ -159,11 +158,21 @@ fn close_on_esc(
 
 fn update(mut gizmos: Gizmos) {
     let grid = RADIUS / 3_f64.sqrt();
-    let count = 20;
+    let count = 100;
     let max = count as f32 * grid as f32;
+    let oh = max / 2.;
+    let color = Color::WHITE.with_alpha(0.25);
     for i in 0..=count {
         let v = i as f32 * grid as f32;
-        gizmos.line(Vec3::new(0., v, 0.), Vec3::new(max, v, 0.), Color::WHITE);
-        gizmos.line(Vec3::new(v, 0., 0.), Vec3::new(v, max, 0.), Color::WHITE);
+        gizmos.line(
+            Vec3::new(-oh, v - oh, 0.),
+            Vec3::new(max - oh, v - oh, 0.),
+            color,
+        );
+        gizmos.line(
+            Vec3::new(v - oh, -oh, 0.),
+            Vec3::new(v - oh, max - oh, 0.),
+            color,
+        );
     }
 }

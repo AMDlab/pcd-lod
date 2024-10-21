@@ -206,11 +206,9 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3> + Sync
                 let cand = grid[z][y][x].candidates();
                 cand.par_iter()
                     .find_any(|q| {
-                        let dist_squared = (current.position() - q.position()).norm_squared();
+                        let dist = (current.position() - q.position()).norm();
                         // radius_squared <= dist_squared && dist_squared <= radius_2_squared
-                        half_radius <= dist_squared.sqrt()
-                            && dist_squared.sqrt() <= radius
-                            && is_valid(q, &grid)
+                        half_radius <= dist && dist <= radius && is_valid(q, &grid)
                         // is_valid(q, &grid)
                     })
                     .map(|next| (*next).clone())
@@ -235,4 +233,3 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3> + Sync
             .collect()
     }
 }
-
