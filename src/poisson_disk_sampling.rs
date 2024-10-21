@@ -4,7 +4,8 @@ use itertools::Itertools;
 use nalgebra::{allocator::Allocator, DefaultAllocator, DimName, OPoint, OVector, RealField, U3};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use crate::point::Point;
+use crate::grid::Grid;
+use crate::{has_position::HasPosition, point::Point};
 
 #[derive(Debug, Clone)]
 pub struct PoissonDiskSampling<T, P> {
@@ -75,7 +76,7 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3> + Sync
                     .flat_map(|(iy, gy)| {
                         gy.iter()
                             .enumerate()
-                            .filter_map(|(ix, g)| match !g.candidates.is_empty() {
+                            .filter_map(|(ix, g)| match !g.candidates().is_empty() {
                                 true => Some(ix),
                                 false => None,
                             })
@@ -228,67 +229,9 @@ impl<T: RealField + Copy + num_traits::ToPrimitive, P: HasPosition<T, U3> + Sync
         grid.into_iter()
             .flat_map(|gz| {
                 gz.into_iter()
-                    .flat_map(|gy| gy.into_iter().filter_map(|g| g.representative))
+                    .flat_map(|gy| gy.into_iter().filter_map(|g| g.representative().cloned()))
             })
             .collect()
-    }
-}
-
-pub trait HasPosition<T: RealField, D: DimName>: Clone
-where
-    DefaultAllocator: Allocator<D>,
-{
-    fn position(&self) -> &OPoint<T, D>;
-}
-
-impl HasPosition<f64, U3> for Point {
-    fn position(&self) -> &OPoint<f64, U3> {
-        &self.position
-    }
-}
-
-#[derive(Debug)]
-struct Grid<'a, P> {
-    representative: Option<P>,
-    candidates: Vec<&'a P>,
-}
-
-impl<'a, P> Default for Grid<'a, P> {
-    fn default() -> Self {
-        Self {
-            representative: None,
-            candidates: vec![],
-        }
-    }
-}
-
-impl<'a, P> Grid<'a, P> {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn set(&mut self, representative: P) {
-        self.representative = Some(representative);
-    }
-
-    fn visited(&self) -> bool {
-        self.representative.is_some()
-    }
-
-    fn representative(&self) -> Option<&P> {
-        self.representative.as_ref()
-    }
-
-    fn insert(&mut self, point: &'a P) {
-        self.candidates.push(point);
-    }
-
-    fn candidates(&self) -> &Vec<&'a P> {
-        &self.candidates
-    }
-
-    fn candidates_mut(&mut self) -> &mut Vec<&'a P> {
-        &mut self.candidates
     }
 }
 
