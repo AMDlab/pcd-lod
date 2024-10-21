@@ -56,3 +56,7 @@ required-features = ["bevy"]
 name = "lod"
 path = "examples/lod.rs"
 required-features = ["bevy"]
+
+[[bench]]
+name = "sampling"
+harness = false
