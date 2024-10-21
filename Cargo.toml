@@ -32,8 +32,8 @@ serial_test = "*"
 criterion = { version = "0.5.1" }
 
 [features]
-# default = []
-default = ["bevy"] # for debugging example
+default = []
+# default = ["bevy"] # for debugging example
 bevy = [
   "dep:bevy",
   "dep:bevy_infinite_grid",

@@ -114,6 +114,13 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
         self.partitions_count
     }
 
+    pub fn sample(&mut self) -> anyhow::Result<()> {
+        for _ in 0..self.max_iterations() {
+            self.step()?;
+        }
+        Ok(())
+    }
+
     pub fn step(&mut self) -> anyhow::Result<()> {
         let divs = self.grid_count.map(|i| (i as f64 / 3_f64).ceil() as usize);
         let address = self.partitions.pop().ok_or(anyhow::anyhow!("no address"))?;
