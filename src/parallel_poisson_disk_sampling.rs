@@ -15,14 +15,14 @@ use crate::{grid::Grid, has_position::HasPosition, misc::min_max, point::Point};
 pub struct ParallelPoissonDiskSampling<'a> {
     inputs: Vec<&'a Point>,
     radius: f64,
+    half_radius: f64,
     grid: Vec<Vec<Vec<Grid<'a, Point>>>>,
     grid_count: Vector3<usize>,
     grid_min: Vector3<f64>,
     grid_max: Vector3<f64>,
     partitions: Vec<Vector3<usize>>,
     partitions_count: usize,
-    cell_size: f64,
-    half_radius: f64,
+    grid_cell_size: f64,
 }
 
 impl<'a> ParallelPoissonDiskSampling<'a> {
@@ -33,10 +33,10 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
         // `cell_size` refers following article
         // https://sighack.com/post/poisson-disk-sampling-bridsons-algorithm
         // "Understanding the Cell Size" section
-        let cell_size = radius / (3.0_f64).sqrt();
+        let grid_cell_size = radius / (3.0_f64).sqrt();
         let half_radius = radius / 2.;
 
-        let grid_count = size.map(|x| (x / cell_size).ceil().max(1.) as usize);
+        let grid_count = size.map(|v| (v / grid_cell_size).ceil().max(1.) as usize);
 
         // println!("grid_size: {:?}", u_grid_size);
         let mut grid: Vec<Vec<Vec<Grid<'_, Point>>>> = vec![];
@@ -53,7 +53,7 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
         }
 
         inputs.iter().for_each(|pt| {
-            let i = index(pt.position(), &grid_min, cell_size);
+            let i = index(pt.position(), &grid_min, grid_cell_size);
             grid[i.z][i.y][i.x].insert(pt);
         });
 
@@ -83,19 +83,19 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
         let mut rng = rand::thread_rng();
         partitions.shuffle(&mut rng);
 
-        let partitions_len = partitions.len();
+        let partitions_count = partitions.len();
 
         Self {
             inputs,
             radius,
+            half_radius,
             grid,
             grid_count,
             grid_min,
             grid_max,
-            cell_size,
-            half_radius,
+            grid_cell_size,
             partitions,
-            partitions_count: partitions_len,
+            partitions_count,
         }
     }
 
@@ -117,8 +117,10 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
     }
 
     pub fn step(&mut self) -> anyhow::Result<()> {
-        let divs = self.grid_count / 3;
+        let divs = self.grid_count.map(|i| (i as f64 / 3_f64).ceil() as usize);
         let address = self.partitions.pop().ok_or(anyhow::anyhow!("no address"))?;
+        // println!("address: {:?}", address);
+
         let count = self.grid_count.clone();
         let items = (0..=divs.z)
             .flat_map(|z| {
@@ -146,23 +148,29 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
                 .collect::<Vec<_>>();
 
             for pt in seeds {
-                let i = index(pt.position(), &self.grid_min, self.cell_size);
+                let i = index(pt.position(), &self.grid_min, self.grid_cell_size);
                 self.grid[i.z][i.y][i.x].set(pt.clone());
             }
         } else {
             let next = items
                 .into_par_iter()
-                .filter_map(|addr| {
-                    let g = &self.grid[addr.z][addr.y][addr.x];
+                .filter_map(|i| {
+                    let g = &self.grid[i.z][i.y][i.x];
                     g.candidates()
                         .par_iter()
                         .find_any(|p| self.is_valid(p))
                         .cloned()
+                    /*
+                    g.candidates()
+                        .iter()
+                        .find(|p| self.is_valid(p))
+                        .cloned()
+                        */
                 })
                 .collect::<Vec<_>>();
             // println!("#next: {}", next.len());
             for pt in next {
-                let i = index(pt.position(), &self.grid_min, self.cell_size);
+                let i = index(pt.position(), &self.grid_min, self.grid_cell_size);
                 self.grid[i.z][i.y][i.x].set(pt.clone());
             }
         }
@@ -171,7 +179,7 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
     }
 
     fn is_valid(&self, p: &Point) -> bool {
-        let i = index(p.position(), &self.grid_min, self.cell_size);
+        let i = index(p.position(), &self.grid_min, self.grid_cell_size);
 
         for dz in -1..1 {
             let z = i.z as isize + dz;
@@ -188,8 +196,8 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
                                 if let Some(q) =
                                     self.grid[z as usize][y as usize][x as usize].representative()
                                 {
-                                    let dist = p.position() - q.position();
-                                    if dist.norm() <= self.radius {
+                                    let dist = (p.position() - q.position()).norm();
+                                    if dist <= self.radius {
                                         return false;
                                     }
                                 }
