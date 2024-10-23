@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use itertools::Itertools;
 use nalgebra::{
-    allocator::Allocator, DefaultAllocator, DimName, OPoint, OVector, RealField, Vector, Vector3,
-    U3,
+    allocator::Allocator, DefaultAllocator, DimName, OPoint, OVector, Point3, RealField, Vector,
+    Vector3, U3,
 };
 use num_traits::ToPrimitive;
 use rand::seq::SliceRandom;
@@ -161,6 +161,20 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
                 .into_par_iter()
                 .filter_map(|i| {
                     let g = &self.grid[i.z][i.y][i.x];
+
+                    /*
+                    let neighbors = &self.neighbors(i);
+                    g.candidates()
+                        .iter()
+                        .find(|p| {
+                            !neighbors.iter().any(|q| {
+                                let dist = (p.position() - q).norm();
+                                dist <= self.radius
+                            })
+                        })
+                        .cloned()
+                    */
+
                     g.candidates()
                         .par_iter()
                         .find_any(|p| self.is_valid(p))
@@ -175,6 +189,36 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
         }
 
         Ok(())
+    }
+
+    fn neighbors(&self, i: Vector3<usize>) -> Vec<Point3<f64>> {
+        (-1..=1)
+            .flat_map(|dz| {
+                let z = i.z as isize + dz;
+                (-1..=1).flat_map(move |dy| {
+                    let y = i.y as isize + dy;
+                    (-1..=1).filter_map(move |dx| {
+                        if dz == 0 && dy == 0 && dx == 0 {
+                            None
+                        } else {
+                            let x = i.x as isize + dx;
+                            if x >= 0
+                                && x < self.grid_count.x as isize
+                                && y >= 0
+                                && y < self.grid_count.y as isize
+                                && z >= 0
+                                && z < self.grid_count.z as isize
+                            {
+                                self.grid[z as usize][y as usize][x as usize].representative()
+                            } else {
+                                None
+                            }
+                        }
+                    })
+                })
+            })
+            .map(|p| p.position().clone())
+            .collect()
     }
 
     fn is_valid(&self, p: &Point) -> bool {
