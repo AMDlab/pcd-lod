@@ -12,6 +12,7 @@ readme = "README.md"
 [dependencies]
 anyhow = "~1.0.81"
 clap = { version = "4.5.20", features = ["derive"] }
+chrono = "0.4.38"
 image = { version = "0.25.4", features = ["webp"] }
 nalgebra = { version = "0.33.1", features = ["serde-serialize", "glam027", "glam028"] }
 num-traits = "0.2.19"
