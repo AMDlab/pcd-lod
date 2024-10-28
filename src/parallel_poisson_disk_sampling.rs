@@ -1,10 +1,5 @@
-use std::collections::HashSet;
-
 use itertools::Itertools;
-use nalgebra::{
-    allocator::Allocator, DefaultAllocator, DimName, OPoint, OVector, Point3, RealField, Vector,
-    Vector3, U3,
-};
+use nalgebra::{OPoint, Point3, RealField, Vector3, U3};
 use num_traits::ToPrimitive;
 use rand::seq::SliceRandom;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
@@ -126,7 +121,7 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
         let address = self.partitions.pop().ok_or(anyhow::anyhow!("no address"))?;
         // println!("address: {:?}", address);
 
-        let count = self.grid_count.clone();
+        let count = self.grid_count;
         let items = (0..=divs.z)
             .flat_map(|z| {
                 (0..=divs.y).flat_map(move |y| {
@@ -217,7 +212,7 @@ impl<'a> ParallelPoissonDiskSampling<'a> {
                     })
                 })
             })
-            .map(|p| p.position().clone())
+            .map(|p| *p.position())
             .collect()
     }
 

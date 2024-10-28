@@ -1,12 +1,12 @@
 use std::collections::HashSet;
 
 use itertools::Itertools;
-use nalgebra::{allocator::Allocator, DefaultAllocator, DimName, OPoint, OVector, RealField, U3};
+use nalgebra::{OPoint, RealField, U3};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::grid::Grid;
+use crate::has_position::HasPosition;
 use crate::misc::min_max;
-use crate::{has_position::HasPosition, point::Point};
 
 #[derive(Debug, Clone)]
 pub struct PoissonDiskSampling<T, P> {
