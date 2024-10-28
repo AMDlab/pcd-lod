@@ -2,7 +2,7 @@
 authors = ["THE UNIVERSITY OF TOKYO, SCHOOL OF ENGINEERING Construction System Management for Innovation"]
 edition = "2021"
 name = "pcd-lod"
-version = "0.1.1"
+version = "0.1.2"
 description = "A LOD generator for point cloud files"
 license = "MIT"
 readme = "README.md"
