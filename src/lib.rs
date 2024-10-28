@@ -10,13 +10,19 @@ use std::{
 use anyhow::ensure;
 
 use point::Point;
-use prelude::{BoundingBox, Coordinates, PointCloudMap, PoissonDiskSampling};
+use prelude::{
+    BoundingBox, Coordinates, ParallelPoissonDiskSampling, PointCloudMap, PoissonDiskSampling,
+};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 mod bounding_box;
 mod color;
 mod encoder;
+mod grid;
+mod has_position;
 mod meta;
+pub mod misc;
+mod parallel_poisson_disk_sampling;
 mod point;
 mod point_cloud_map;
 mod point_cloud_unit;
@@ -30,6 +36,7 @@ pub mod prelude {
     pub use crate::color::*;
     pub use crate::encoder::*;
     pub use crate::meta::*;
+    pub use crate::parallel_poisson_disk_sampling::*;
     pub use crate::point::*;
     pub use crate::point_cloud_map::*;
     pub use crate::point_cloud_unit::*;
@@ -218,7 +225,12 @@ where
             let pts = if under_threshold {
                 unit.points.clone()
             } else {
-                sampler.sample(unit.points(), calculate_sampling_radius(1))
+                // sampler.sample(unit.points())
+                let radius = calculate_sampling_radius(1);
+                let mut sampler =
+                    ParallelPoissonDiskSampling::new(unit.points().iter().collect(), radius);
+                let _ = sampler.sample();
+                sampler.samples().into_iter().cloned().collect()
             };
             callback_per_unit(LODUnit {
                 lod: 0,
@@ -251,8 +263,13 @@ where
                 let pts = if !has_over_threshold {
                     u.points.clone()
                 } else {
-                    sampler.sample(u.points(), sampling_radius)
-                    // u.points.clone()
+                    // sampler.sample(u.points(), sampling_radius)
+                    let mut sampler = ParallelPoissonDiskSampling::new(
+                        u.points().iter().collect(),
+                        sampling_radius,
+                    );
+                    let _ = sampler.sample();
+                    sampler.samples().into_iter().cloned().collect()
                 };
                 (k, pts)
             })
