@@ -251,16 +251,11 @@ where
         let lod = 2_u32.pow(next.lod());
         let sampling_radius = calculate_sampling_radius(lod);
 
-        let has_over_threshold = next
-            .map()
-            .iter()
-            .any(|u| u.1.points.len() >= point_count_threshold);
-
         let samples = next
             .map()
             .par_iter()
             .map(|(k, u)| {
-                let pts = if !has_over_threshold {
+                let pts = if u.points.len() < point_count_threshold {
                     u.points.clone()
                 } else {
                     // sampler.sample(u.points(), sampling_radius)
@@ -296,6 +291,11 @@ where
         }
         callback_per_lod(next.lod() + 1, bounds.clone(), coordinates.clone()).await?;
 
+        // Break loop if all points are under threshold
+        let has_over_threshold = next
+            .map()
+            .iter()
+            .any(|u| u.1.points.len() >= point_count_threshold);
         if !has_over_threshold {
             break;
         }
